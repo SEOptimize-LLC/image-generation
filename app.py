@@ -1,10 +1,8 @@
 import streamlit as st
-import openai
 from openai import OpenAI
 import requests
 from PIL import Image
 from io import BytesIO
-import base64
 import os
 
 # Page configuration
@@ -24,28 +22,19 @@ st.markdown("""
     :root {
         --seo-green: #00D26A;
         --seo-green-dark: #00A050;
-        --seo-green-light: #00FF7F;
         --bg-primary: #ffffff;
         --bg-secondary: #f8f9fa;
-        --bg-tertiary: #e9ecef;
         --text-primary: #212529;
         --text-secondary: #6c757d;
         --border-color: #dee2e6;
         --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
         --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
-        --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
     }
     
     /* Global styles */
     .stApp {
         font-family: 'Inter', sans-serif;
         background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-    }
-    
-    /* Main content styling */
-    .main .block-container {
-        padding-top: 3rem;
-        max-width: 900px;
     }
     
     /* Brand header */
@@ -79,8 +68,6 @@ st.markdown("""
         font-size: 1.1rem;
         font-weight: 400;
     }
-    
-    /* Streamlit elements customization */
     
     /* Headers */
     h1, h2, h3 {
@@ -141,22 +128,7 @@ st.markdown("""
         background: linear-gradient(90deg, var(--seo-green-dark) 0%, var(--seo-green) 100%);
     }
     
-    .stSlider > div > div > div {
-        color: var(--text-secondary);
-    }
-    
     /* Radio buttons */
-    .stRadio > div {
-        background: white;
-        padding: 1rem;
-        border-radius: 10px;
-        border: 1px solid var(--border-color);
-    }
-    
-    .stRadio > div > label > div:first-child > div {
-        border-color: var(--seo-green);
-    }
-    
     .stRadio > div > label > div:first-child > div[data-checked="true"] {
         background-color: var(--seo-green);
         border-color: var(--seo-green);
@@ -180,10 +152,6 @@ st.markdown("""
     section[data-testid="stSidebar"] {
         background: white;
         border-right: 1px solid var(--border-color);
-    }
-    
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 2rem;
     }
     
     /* Success/Error/Info messages */
@@ -211,7 +179,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0, 210, 106, 0.25);
     }
     
-    /* Info box */
+    /* Info badge */
     .info-badge {
         display: inline-block;
         background: rgba(0, 210, 106, 0.1);
@@ -246,21 +214,12 @@ st.markdown("""
         text-align: center;
         padding: 1.5rem 0;
         margin-bottom: 1.5rem;
-        border-bottom: 2px solid var(--bg-tertiary);
+        border-bottom: 2px solid #f0f0f0;
     }
     
     .sidebar-brand-text {
         font-size: 1.5rem;
         font-weight: 700;
-    }
-    
-    /* Custom section styling */
-    .section-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: var(--shadow-sm);
-        margin-bottom: 1.5rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -283,10 +242,6 @@ if 'api_key' not in st.session_state:
         st.session_state.api_key = ""
 if 'generated_images' not in st.session_state:
     st.session_state.generated_images = []
-if 'num_images' not in st.session_state:
-    st.session_state.num_images = 1
-if 'previous_model' not in st.session_state:
-    st.session_state.previous_model = "gpt-image-1"
 
 # Sidebar
 with st.sidebar:
@@ -340,12 +295,9 @@ with st.sidebar:
         "Choose Model",
         options=["gpt-image-1", "dall-e-3"],
         index=0,
-        help="Select the AI model for image generation"
+        help="Select the AI model for image generation",
+        key="model_radio"
     )
-    
-    if model_choice != st.session_state.previous_model:
-        st.session_state.num_images = 1
-        st.session_state.previous_model = model_choice
     
     if model_choice == "gpt-image-1":
         st.markdown('<span class="info-badge">Latest Model</span>', unsafe_allow_html=True)
@@ -376,17 +328,21 @@ prompt = st.text_area(
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    max_images = 10 if model_choice == "gpt-image-1" else 1
-    current_value = min(st.session_state.num_images, max_images)
+    # Determine max images based on model
+    if model_choice == "gpt-image-1":
+        max_images = 10
+        default_value = 1
+    else:  # dall-e-3
+        max_images = 1
+        default_value = 1
     
     num_images = st.slider(
         "Number of images",
         min_value=1,
         max_value=max_images,
-        value=current_value,
-        key="num_images_slider"
+        value=default_value,
+        key=f"num_images_{model_choice}"  # Unique key per model
     )
-    st.session_state.num_images = num_images
 
 with col2:
     quality_steps = st.slider(
@@ -438,6 +394,7 @@ with st.expander("🔧 Advanced Settings"):
                 options=["png", "jpeg", "webp"],
                 index=0
             )
+            style_param = None  # Not used for gpt-image-1
         else:
             image_size = st.selectbox(
                 "Image Size",
@@ -482,6 +439,9 @@ with st.expander("🔧 Advanced Settings"):
                 max_value=100,
                 value=100
             )
+        else:
+            background_option = None
+            output_compression = None
 
 # Style modifiers
 style_modifiers = {
@@ -516,32 +476,61 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                 full_prompt += f" [seed:{seed}]"
             
             with st.spinner(f"Creating {num_images} image(s)..."):
-                client = OpenAI(api_key=st.session_state.api_key)
+                # Initialize client without any proxy parameters
+                try:
+                    client = OpenAI(
+                        api_key=st.session_state.api_key,
+                        # Don't pass any proxy parameters
+                    )
+                except TypeError:
+                    # Fallback if there's an issue with initialization
+                    import openai
+                    openai.api_key = st.session_state.api_key
+                    client = OpenAI(api_key=st.session_state.api_key)
+                
                 generated_images = []
                 
                 if model_choice == "gpt-image-1":
+                    # Build params for gpt-image-1
                     params = {
                         'model': model_choice,
                         'prompt': full_prompt,
                         'size': image_size,
                         'quality': image_quality,
-                        'n': num_images,
-                        'response_format': output_format
+                        'n': num_images
                     }
-                    if 'background_option' in locals() and background_option != "default":
+                    
+                    # Only add optional params if they exist and are not defaults
+                    if output_format:
+                        params['response_format'] = output_format
+                    if background_option and background_option != "default":
                         params['background'] = background_option
-                    if 'output_compression' in locals() and output_compression != 100:
+                    if output_compression is not None and output_compression != 100:
                         params['output_compression'] = output_compression
                     
-                    response = client.images.generate(**params)
-                    for img_data in response.data:
-                        generated_images.append({
-                            'url': img_data.url,
-                            'prompt': full_prompt,
-                            'model': model_choice,
-                            'format': output_format
-                        })
+                    try:
+                        response = client.images.generate(**params)
+                        for img_data in response.data:
+                            generated_images.append({
+                                'url': img_data.url,
+                                'prompt': full_prompt,
+                                'model': model_choice,
+                                'format': output_format
+                            })
+                    except Exception as batch_error:
+                        # Try individual generation if batch fails
+                        st.warning("Batch generation not available, generating individually...")
+                        params['n'] = 1
+                        for i in range(num_images):
+                            response = client.images.generate(**params)
+                            generated_images.append({
+                                'url': response.data[0].url,
+                                'prompt': full_prompt,
+                                'model': model_choice,
+                                'format': output_format
+                            })
                 else:
+                    # DALL-E 3 generation (always individual)
                     for i in range(num_images):
                         params = {
                             'model': model_choice,
@@ -550,7 +539,8 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                             'quality': image_quality,
                             'n': 1
                         }
-                        if 'style_param' in locals():
+                        
+                        if style_param:
                             params['style'] = style_param
                         
                         response = client.images.generate(**params)
@@ -565,7 +555,15 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                 st.success(f"✅ Successfully generated {len(generated_images)} image(s)!")
                 
         except Exception as e:
-            st.error(f"❌ Error: {str(e)}")
+            error_msg = str(e)
+            if "proxies" in error_msg:
+                st.error("❌ API initialization error. Please check your OpenAI library version.")
+                st.info("Try updating: pip install --upgrade openai")
+            elif "model" in error_msg.lower():
+                st.error(f"❌ Model access error: {error_msg}")
+                st.info("Try using dall-e-3 if gpt-image-1 is not available for your account.")
+            else:
+                st.error(f"❌ Error: {error_msg}")
 
 # Display Generated Images
 if st.session_state.generated_images:
@@ -576,33 +574,39 @@ if st.session_state.generated_images:
         col1, col2 = st.columns([4, 1])
         
         with col1:
-            response = requests.get(img_data['url'])
-            img = Image.open(BytesIO(response.content))
-            st.image(img, caption=f"Image {idx + 1}", use_column_width=True)
+            try:
+                response = requests.get(img_data['url'])
+                img = Image.open(BytesIO(response.content))
+                st.image(img, caption=f"Image {idx + 1}", use_column_width=True)
+            except:
+                st.error(f"Could not load image {idx + 1}")
         
         with col2:
-            img_bytes = BytesIO()
-            file_format = img_data.get('format', 'png')
-            
-            if file_format == 'webp':
-                img.save(img_bytes, format='WEBP', quality=95)
-                mime_type = "image/webp"
-            elif file_format == 'jpeg':
-                img.save(img_bytes, format='JPEG', quality=95)
-                mime_type = "image/jpeg"
-            else:
-                img.save(img_bytes, format='PNG')
-                mime_type = "image/png"
-            
-            img_bytes = img_bytes.getvalue()
-            
-            st.download_button(
-                label="⬇️ Download",
-                data=img_bytes,
-                file_name=f"seo_image_{idx + 1}.{file_format}",
-                mime=mime_type,
-                key=f"download_{idx}"
-            )
+            try:
+                img_bytes = BytesIO()
+                file_format = img_data.get('format', 'png')
+                
+                if file_format == 'webp':
+                    img.save(img_bytes, format='WEBP', quality=95)
+                    mime_type = "image/webp"
+                elif file_format == 'jpeg':
+                    img.save(img_bytes, format='JPEG', quality=95)
+                    mime_type = "image/jpeg"
+                else:
+                    img.save(img_bytes, format='PNG')
+                    mime_type = "image/png"
+                
+                img_bytes = img_bytes.getvalue()
+                
+                st.download_button(
+                    label="⬇️ Download",
+                    data=img_bytes,
+                    file_name=f"seo_image_{idx + 1}.{file_format}",
+                    mime=mime_type,
+                    key=f"download_{idx}"
+                )
+            except:
+                st.error("Download unavailable")
 
 # Footer
 st.markdown("""
