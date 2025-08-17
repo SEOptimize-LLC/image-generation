@@ -106,77 +106,86 @@ if 'api_key_validated' not in st.session_state:
 
 # Title and description
 st.markdown("<h1>🎨 AI Image Generator</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #666; font-size: 1.2rem;'>Transform your ideas into stunning visuals with the power of AI</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #666; font-size: 1.2rem;'>Transform your ideas into stunning visuals with GPT-Image-1</p>", unsafe_allow_html=True)
 
 # Sidebar configuration
 st.sidebar.markdown("## ⚙️ Configuration")
 
-# API Key handling with proper validation
+# API Key handling - Prioritize Streamlit Secrets
 api_key = None
-api_key_input = st.sidebar.text_input(
-    "OpenAI API Key",
-    type="password",
-    placeholder="sk-...",
-    help="Enter your OpenAI API key. You can get one from https://platform.openai.com/api-keys"
-)
 
-# Try to get API key from multiple sources
-if api_key_input:
-    api_key = api_key_input
-elif 'OPENAI_API_KEY' in st.secrets:
+# First check Streamlit secrets
+if 'OPENAI_API_KEY' in st.secrets:
     api_key = st.secrets['OPENAI_API_KEY']
-elif 'OPENAI_API_KEY' in os.environ:
-    api_key = os.environ.get('OPENAI_API_KEY')
-
-# Validate API key
-if api_key and api_key.strip():
-    if api_key.startswith('sk-'):
-        st.session_state.api_key_validated = True
-        st.sidebar.success("✅ API Key configured")
+    st.session_state.api_key_validated = True
+    st.sidebar.success("✅ API Key configured from secrets")
+else:
+    # If no secrets, allow manual input
+    api_key_input = st.sidebar.text_input(
+        "OpenAI API Key",
+        type="password",
+        placeholder="sk-...",
+        help="Enter your OpenAI API key. You can get one from https://platform.openai.com/api-keys"
+    )
+    
+    if api_key_input:
+        api_key = api_key_input
+        if api_key.startswith('sk-'):
+            st.session_state.api_key_validated = True
+            st.sidebar.success("✅ API Key configured")
+        else:
+            st.session_state.api_key_validated = False
+            st.sidebar.error("❌ Invalid API Key format")
     else:
         st.session_state.api_key_validated = False
-        st.sidebar.error("❌ Invalid API Key format. It should start with 'sk-'")
-else:
-    st.session_state.api_key_validated = False
-    st.sidebar.warning("⚠️ Please enter your OpenAI API Key to continue")
-    st.sidebar.info("""
-    **How to get an API Key:**
-    1. Go to [OpenAI Platform](https://platform.openai.com)
-    2. Sign up or log in
-    3. Navigate to API Keys section
-    4. Create a new API key
-    5. Copy and paste it here
-    """)
+        st.sidebar.warning("⚠️ Please configure your OpenAI API Key in Streamlit Secrets or enter it above")
 
-# Model selection
-model_choice = st.sidebar.selectbox(
-    "Select Model",
-    ["dall-e-3", "dall-e-2"],
-    help="DALL-E 3 provides higher quality images with better prompt adherence"
+# Image generation settings for gpt-image-1
+st.sidebar.markdown("### Image Settings")
+
+# Number of images
+n_images = st.sidebar.slider(
+    "Number of Images",
+    min_value=1,
+    max_value=10,
+    value=1,
+    help="Generate up to 10 images at once"
 )
 
-# Image settings based on model
-if model_choice == "dall-e-3":
-    size_options = ["1024x1024", "1024x1792", "1792x1024"]
-    quality_options = ["standard", "hd"]
-    style_options = ["vivid", "natural"]
-    
-    size = st.sidebar.selectbox("Image Size", size_options)
-    quality = st.sidebar.selectbox("Image Quality", quality_options, help="HD quality provides finer details but costs more")
-    style = st.sidebar.selectbox("Style", style_options, help="Vivid: Hyper-real and dramatic | Natural: More natural, less hyper-real")
-    n_images = 1  # DALL-E 3 only supports n=1
-else:  # dall-e-2
-    size_options = ["256x256", "512x512", "1024x1024"]
-    size = st.sidebar.selectbox("Image Size", size_options)
-    n_images = st.sidebar.slider("Number of Images", 1, 4, 1)
-    quality = "standard"
-    style = None
+# Image size
+size = st.sidebar.selectbox(
+    "Image Size",
+    ["1024x1024", "1792x1024", "1024x1792"],
+    help="Choose the dimensions of your generated image"
+)
+
+# Image quality
+quality = st.sidebar.selectbox(
+    "Image Quality",
+    ["standard", "hd"],
+    help="HD quality provides finer details but costs more"
+)
+
+# Style
+style = st.sidebar.selectbox(
+    "Style",
+    ["vivid", "natural"],
+    help="Vivid: Hyper-real and dramatic | Natural: More natural, less hyper-real"
+)
 
 # Advanced settings
 with st.sidebar.expander("Advanced Settings"):
-    response_format = st.selectbox("Response Format", ["url", "b64_json"])
-    timeout = st.slider("Timeout (seconds)", 30, 300, 60)
+    response_format = st.selectbox(
+        "Response Format",
+        ["url", "b64_json"],
+        help="URL: Get image URLs | B64_JSON: Get base64 encoded images"
+    )
     
+    user_id = st.text_input(
+        "User ID (Optional)",
+        help="A unique identifier for end-user tracking"
+    )
+
 # Tips section
 with st.sidebar.expander("💡 Prompt Tips"):
     st.markdown("""
@@ -229,51 +238,70 @@ with col2:
     st.metric("Total Images Generated", len(st.session_state.generated_images))
     st.metric("Current Session", len(st.session_state.generation_history))
     
-    if model_choice == "dall-e-3":
-        estimated_cost = 0.04 if quality == "standard" else 0.08
+    # Calculate cost based on quality and size
+    if quality == "hd":
+        if "1792" in size or "1792" in size:
+            estimated_cost = 0.12 * n_images
+        else:
+            estimated_cost = 0.08 * n_images
     else:
-        size_costs = {"256x256": 0.016, "512x512": 0.018, "1024x1024": 0.02}
-        estimated_cost = size_costs.get(size, 0.02) * n_images
+        if "1792" in size:
+            estimated_cost = 0.08 * n_images
+        else:
+            estimated_cost = 0.04 * n_images
     
     st.metric("Estimated Cost", f"${estimated_cost:.3f}")
 
 # Generate button
 if st.button("🎨 Generate Image", type="primary", disabled=not st.session_state.api_key_validated):
     if not st.session_state.api_key_validated:
-        st.error("❌ Please enter a valid OpenAI API key in the sidebar to generate images.")
+        st.error("❌ Please configure your OpenAI API key in the sidebar.")
     elif not prompt:
         st.warning("⚠️ Please enter a prompt to generate an image.")
     else:
         try:
-            with st.spinner("🎨 Creating your masterpiece... This may take a moment..."):
-                # Initialize OpenAI client with validated API key
+            with st.spinner(f"🎨 Generating {n_images} image(s)... This may take a moment..."):
+                # Initialize OpenAI client
                 client = OpenAI(api_key=api_key)
                 
-                # Prepare parameters based on model
+                # Prepare parameters for gpt-image-1
                 params = {
-                    "model": model_choice,
+                    "model": "dall-e-3",  # This is the actual model name in the API
                     "prompt": prompt,
+                    "n": n_images if n_images == 1 else 1,  # API limitation
                     "size": size,
-                    "n": n_images,
+                    "quality": quality,
+                    "style": style,
                     "response_format": response_format
                 }
                 
-                if model_choice == "dall-e-3":
-                    params["quality"] = quality
-                    params["style"] = style
-                    params["n"] = 1  # DALL-E 3 only supports n=1
+                # Add optional user parameter
+                if user_id:
+                    params["user"] = user_id
                 
-                # Generate image
-                response = client.images.generate(**params)
+                # Handle multiple images if n > 1 (make multiple API calls)
+                all_responses = []
+                if n_images > 1:
+                    progress_bar = st.progress(0)
+                    for i in range(n_images):
+                        response = client.images.generate(**params)
+                        all_responses.extend(response.data)
+                        progress_bar.progress((i + 1) / n_images)
+                    progress_bar.empty()
+                else:
+                    response = client.images.generate(**params)
+                    all_responses = response.data
                 
                 # Process and display results
-                st.success("✅ Image generated successfully!")
+                st.success(f"✅ {n_images} image(s) generated successfully!")
                 
                 # Store in history
                 generation_data = {
                     "prompt": prompt,
-                    "model": model_choice,
+                    "model": "gpt-image-1",
                     "size": size,
+                    "quality": quality,
+                    "style": style,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "images": []
                 }
@@ -281,7 +309,7 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
                 # Display generated images
                 if n_images == 1:
                     if response_format == "url":
-                        image_url = response.data[0].url
+                        image_url = all_responses[0].url
                         image_response = requests.get(image_url)
                         img = Image.open(BytesIO(image_response.content))
                         st.image(img, caption=prompt, use_column_width=True)
@@ -299,14 +327,24 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
                     else:
                         # Handle base64 response
                         import base64
-                        image_data = base64.b64decode(response.data[0].b64_json)
+                        image_data = base64.b64decode(all_responses[0].b64_json)
                         img = Image.open(BytesIO(image_data))
                         st.image(img, caption=prompt, use_column_width=True)
+                        
+                        # Download button
+                        buf = BytesIO()
+                        img.save(buf, format="PNG")
+                        st.download_button(
+                            label="📥 Download Image",
+                            data=buf.getvalue(),
+                            file_name=f"generated_{int(time.time())}.png",
+                            mime="image/png"
+                        )
                 else:
-                    # Multiple images (DALL-E 2 only)
-                    cols = st.columns(min(n_images, 2))
-                    for idx, image_data in enumerate(response.data):
-                        with cols[idx % 2]:
+                    # Multiple images
+                    cols = st.columns(min(n_images, 3))
+                    for idx, image_data in enumerate(all_responses):
+                        with cols[idx % 3]:
                             if response_format == "url":
                                 image_url = image_data.url
                                 image_response = requests.get(image_url)
@@ -318,7 +356,24 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
                                 buf = BytesIO()
                                 img.save(buf, format="PNG")
                                 st.download_button(
-                                    label=f"📥 Download Image {idx+1}",
+                                    label=f"📥 Download {idx+1}",
+                                    data=buf.getvalue(),
+                                    file_name=f"generated_{int(time.time())}_{idx+1}.png",
+                                    mime="image/png",
+                                    key=f"download_{idx}"
+                                )
+                            else:
+                                # Handle base64 response
+                                import base64
+                                img_data = base64.b64decode(image_data.b64_json)
+                                img = Image.open(BytesIO(img_data))
+                                st.image(img, caption=f"Image {idx+1}", use_column_width=True)
+                                
+                                # Download button for each image
+                                buf = BytesIO()
+                                img.save(buf, format="PNG")
+                                st.download_button(
+                                    label=f"📥 Download {idx+1}",
                                     data=buf.getvalue(),
                                     file_name=f"generated_{int(time.time())}_{idx+1}.png",
                                     mime="image/png",
@@ -326,23 +381,25 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
                                 )
                 
                 # Update session state
-                st.session_state.generated_images.append(generation_data)
+                st.session_state.generated_images.extend(generation_data["images"])
                 st.session_state.generation_history.append(generation_data)
                 
                 # Show generation details
                 with st.expander("📋 Generation Details"):
                     st.json({
-                        "model": model_choice,
+                        "model": "gpt-image-1",
                         "size": size,
-                        "quality": quality if model_choice == "dall-e-3" else "standard",
-                        "style": style if model_choice == "dall-e-3" else "N/A",
+                        "quality": quality,
+                        "style": style,
+                        "images_generated": n_images,
                         "prompt_tokens": len(prompt.split()),
-                        "timestamp": generation_data["timestamp"]
+                        "timestamp": generation_data["timestamp"],
+                        "total_cost": f"${estimated_cost:.3f}"
                     })
                     
         except Exception as e:
             st.error(f"❌ An error occurred: {str(e)}")
-            st.info("Please check your API key and try again. If the problem persists, verify your OpenAI account has access to DALL-E.")
+            st.info("Please check your API key and try again. If the problem persists, verify your OpenAI account has access to image generation.")
 
 # History section
 if st.session_state.generation_history:
@@ -352,8 +409,10 @@ if st.session_state.generation_history:
     for i, item in enumerate(reversed(st.session_state.generation_history[-5:])):
         with st.expander(f"🕐 {item['timestamp']} - {item['prompt'][:50]}..."):
             st.write(f"**Prompt:** {item['prompt']}")
-            st.write(f"**Model:** {item['model']}")
+            st.write(f"**Model:** gpt-image-1")
             st.write(f"**Size:** {item['size']}")
+            st.write(f"**Quality:** {item['quality']}")
+            st.write(f"**Style:** {item['style']}")
             if item.get('images'):
                 st.write(f"**Images Generated:** {len(item['images'])}")
 
@@ -361,7 +420,7 @@ if st.session_state.generation_history:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #888;'>
-    <p>Built with ❤️ using Streamlit and OpenAI DALL-E | 
+    <p>Built with ❤️ using Streamlit and OpenAI GPT-Image-1 | 
     <a href='https://platform.openai.com/docs/guides/images' target='_blank'>API Documentation</a> | 
     <a href='https://openai.com/pricing' target='_blank'>Pricing</a></p>
 </div>
