@@ -6,6 +6,7 @@ from PIL import Image
 from io import BytesIO
 import time
 import json
+import base64
 
 # Page configuration
 st.set_page_config(
@@ -152,34 +153,52 @@ n_images = st.sidebar.slider(
     help="Generate up to 10 images at once"
 )
 
-# Image size
+# Image size - gpt-image-1 specific sizes
 size = st.sidebar.selectbox(
     "Image Size",
-    ["1024x1024", "1792x1024", "1024x1792"],
-    help="Choose the dimensions of your generated image"
+    ["auto", "1024x1024", "1536x1024", "1024x1536"],
+    help="auto: Let the model decide | 1024x1024: Square | 1536x1024: Landscape | 1024x1536: Portrait"
 )
 
-# Image quality
+# Image quality - gpt-image-1 specific options
 quality = st.sidebar.selectbox(
     "Image Quality",
-    ["standard", "hd"],
-    help="HD quality provides finer details but costs more"
+    ["auto", "high", "medium", "low"],
+    help="auto: Model selects best quality | high: Best quality | medium: Balanced | low: Faster generation"
 )
 
-# Style
-style = st.sidebar.selectbox(
-    "Style",
-    ["vivid", "natural"],
-    help="Vivid: Hyper-real and dramatic | Natural: More natural, less hyper-real"
+# Output format - gpt-image-1 specific
+output_format = st.sidebar.selectbox(
+    "Output Format",
+    ["png", "jpeg", "webp"],
+    help="Choose the file format for your generated images"
 )
+
+# Background - gpt-image-1 specific
+background = st.sidebar.selectbox(
+    "Background",
+    ["auto", "transparent", "opaque"],
+    help="auto: Model decides | transparent: Requires PNG or WebP format | opaque: Solid background"
+)
+
+# Validate background/format combination
+if background == "transparent" and output_format == "jpeg":
+    st.sidebar.warning("⚠️ JPEG doesn't support transparency. Switching to PNG.")
+    output_format = "png"
 
 # Advanced settings
 with st.sidebar.expander("Advanced Settings"):
-    response_format = st.selectbox(
-        "Response Format",
-        ["url", "b64_json"],
-        help="URL: Get image URLs | B64_JSON: Get base64 encoded images"
-    )
+    # Output compression - only for JPEG and WebP
+    if output_format in ["jpeg", "webp"]:
+        output_compression = st.slider(
+            "Compression Level (%)",
+            min_value=0,
+            max_value=100,
+            value=100,
+            help="Lower values = smaller file size but lower quality"
+        )
+    else:
+        output_compression = None
     
     user_id = st.text_input(
         "User ID (Optional)",
@@ -238,18 +257,8 @@ with col2:
     st.metric("Total Images Generated", len(st.session_state.generated_images))
     st.metric("Current Session", len(st.session_state.generation_history))
     
-    # Calculate cost based on quality and size
-    if quality == "hd":
-        if "1792" in size or "1792" in size:
-            estimated_cost = 0.12 * n_images
-        else:
-            estimated_cost = 0.08 * n_images
-    else:
-        if "1792" in size:
-            estimated_cost = 0.08 * n_images
-        else:
-            estimated_cost = 0.04 * n_images
-    
+    # Estimate cost (approximate)
+    estimated_cost = 0.04 * n_images  # Adjust based on actual pricing
     st.metric("Estimated Cost", f"${estimated_cost:.3f}")
 
 # Generate button
@@ -266,31 +275,41 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
                 
                 # Prepare parameters for gpt-image-1
                 params = {
-                    "model": "dall-e-3",  # This is the actual model name in the API
+                    "model": "dall-e-3",  # This is what the API expects
                     "prompt": prompt,
-                    "n": n_images if n_images == 1 else 1,  # API limitation
+                    "n": 1,  # API limitation - will loop if n_images > 1
                     "size": size,
                     "quality": quality,
-                    "style": style,
-                    "response_format": response_format
+                    "output_format": output_format,
+                    "background": background
                 }
+                
+                # Add compression if applicable
+                if output_compression is not None:
+                    params["output_compression"] = output_compression
                 
                 # Add optional user parameter
                 if user_id:
                     params["user"] = user_id
                 
-                # Handle multiple images if n > 1 (make multiple API calls)
-                all_responses = []
+                # Handle multiple images (make multiple API calls)
+                all_images = []
                 if n_images > 1:
                     progress_bar = st.progress(0)
                     for i in range(n_images):
                         response = client.images.generate(**params)
-                        all_responses.extend(response.data)
+                        # gpt-image-1 always returns b64_json
+                        img_data = base64.b64decode(response.data[0].b64_json)
+                        img = Image.open(BytesIO(img_data))
+                        all_images.append(img)
                         progress_bar.progress((i + 1) / n_images)
                     progress_bar.empty()
                 else:
                     response = client.images.generate(**params)
-                    all_responses = response.data
+                    # gpt-image-1 always returns b64_json
+                    img_data = base64.b64decode(response.data[0].b64_json)
+                    img = Image.open(BytesIO(img_data))
+                    all_images.append(img)
                 
                 # Process and display results
                 st.success(f"✅ {n_images} image(s) generated successfully!")
@@ -301,101 +320,81 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
                     "model": "gpt-image-1",
                     "size": size,
                     "quality": quality,
-                    "style": style,
+                    "background": background,
+                    "output_format": output_format,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "images": []
+                    "images_count": n_images
                 }
                 
                 # Display generated images
                 if n_images == 1:
-                    if response_format == "url":
-                        image_url = all_responses[0].url
-                        image_response = requests.get(image_url)
-                        img = Image.open(BytesIO(image_response.content))
-                        st.image(img, caption=prompt, use_column_width=True)
-                        generation_data["images"].append(image_url)
-                        
-                        # Download button
-                        buf = BytesIO()
-                        img.save(buf, format="PNG")
-                        st.download_button(
-                            label="📥 Download Image",
-                            data=buf.getvalue(),
-                            file_name=f"generated_{int(time.time())}.png",
-                            mime="image/png"
-                        )
-                    else:
-                        # Handle base64 response
-                        import base64
-                        image_data = base64.b64decode(all_responses[0].b64_json)
-                        img = Image.open(BytesIO(image_data))
-                        st.image(img, caption=prompt, use_column_width=True)
-                        
-                        # Download button
-                        buf = BytesIO()
-                        img.save(buf, format="PNG")
-                        st.download_button(
-                            label="📥 Download Image",
-                            data=buf.getvalue(),
-                            file_name=f"generated_{int(time.time())}.png",
-                            mime="image/png"
-                        )
+                    st.image(all_images[0], caption=prompt, use_column_width=True)
+                    
+                    # Download button
+                    buf = BytesIO()
+                    if output_format == "png":
+                        all_images[0].save(buf, format="PNG")
+                        mime_type = "image/png"
+                    elif output_format == "jpeg":
+                        all_images[0].save(buf, format="JPEG", quality=output_compression or 100)
+                        mime_type = "image/jpeg"
+                    else:  # webp
+                        all_images[0].save(buf, format="WEBP", quality=output_compression or 100)
+                        mime_type = "image/webp"
+                    
+                    st.download_button(
+                        label="📥 Download Image",
+                        data=buf.getvalue(),
+                        file_name=f"generated_{int(time.time())}.{output_format}",
+                        mime=mime_type
+                    )
                 else:
                     # Multiple images
                     cols = st.columns(min(n_images, 3))
-                    for idx, image_data in enumerate(all_responses):
+                    for idx, img in enumerate(all_images):
                         with cols[idx % 3]:
-                            if response_format == "url":
-                                image_url = image_data.url
-                                image_response = requests.get(image_url)
-                                img = Image.open(BytesIO(image_response.content))
-                                st.image(img, caption=f"Image {idx+1}", use_column_width=True)
-                                generation_data["images"].append(image_url)
-                                
-                                # Download button for each image
-                                buf = BytesIO()
+                            st.image(img, caption=f"Image {idx+1}", use_column_width=True)
+                            
+                            # Download button for each image
+                            buf = BytesIO()
+                            if output_format == "png":
                                 img.save(buf, format="PNG")
-                                st.download_button(
-                                    label=f"📥 Download {idx+1}",
-                                    data=buf.getvalue(),
-                                    file_name=f"generated_{int(time.time())}_{idx+1}.png",
-                                    mime="image/png",
-                                    key=f"download_{idx}"
-                                )
-                            else:
-                                # Handle base64 response
-                                import base64
-                                img_data = base64.b64decode(image_data.b64_json)
-                                img = Image.open(BytesIO(img_data))
-                                st.image(img, caption=f"Image {idx+1}", use_column_width=True)
-                                
-                                # Download button for each image
-                                buf = BytesIO()
-                                img.save(buf, format="PNG")
-                                st.download_button(
-                                    label=f"📥 Download {idx+1}",
-                                    data=buf.getvalue(),
-                                    file_name=f"generated_{int(time.time())}_{idx+1}.png",
-                                    mime="image/png",
-                                    key=f"download_{idx}"
-                                )
+                                mime_type = "image/png"
+                            elif output_format == "jpeg":
+                                img.save(buf, format="JPEG", quality=output_compression or 100)
+                                mime_type = "image/jpeg"
+                            else:  # webp
+                                img.save(buf, format="WEBP", quality=output_compression or 100)
+                                mime_type = "image/webp"
+                            
+                            st.download_button(
+                                label=f"📥 Download {idx+1}",
+                                data=buf.getvalue(),
+                                file_name=f"generated_{int(time.time())}_{idx+1}.{output_format}",
+                                mime=mime_type,
+                                key=f"download_{idx}"
+                            )
                 
                 # Update session state
-                st.session_state.generated_images.extend(generation_data["images"])
+                st.session_state.generated_images.extend([generation_data for _ in range(n_images)])
                 st.session_state.generation_history.append(generation_data)
                 
                 # Show generation details
                 with st.expander("📋 Generation Details"):
-                    st.json({
+                    details = {
                         "model": "gpt-image-1",
                         "size": size,
                         "quality": quality,
-                        "style": style,
+                        "background": background,
+                        "output_format": output_format,
                         "images_generated": n_images,
                         "prompt_tokens": len(prompt.split()),
                         "timestamp": generation_data["timestamp"],
                         "total_cost": f"${estimated_cost:.3f}"
-                    })
+                    }
+                    if output_compression is not None:
+                        details["compression"] = f"{output_compression}%"
+                    st.json(details)
                     
         except Exception as e:
             st.error(f"❌ An error occurred: {str(e)}")
@@ -412,9 +411,9 @@ if st.session_state.generation_history:
             st.write(f"**Model:** gpt-image-1")
             st.write(f"**Size:** {item['size']}")
             st.write(f"**Quality:** {item['quality']}")
-            st.write(f"**Style:** {item['style']}")
-            if item.get('images'):
-                st.write(f"**Images Generated:** {len(item['images'])}")
+            st.write(f"**Background:** {item['background']}")
+            st.write(f"**Format:** {item['output_format']}")
+            st.write(f"**Images Generated:** {item['images_count']}")
 
 # Footer
 st.markdown("---")
