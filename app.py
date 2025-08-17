@@ -240,6 +240,7 @@ def get_openai_client(api_key):
         # Create client with absolute minimum configuration
         client = OpenAI(
             api_key=st.session_state.api_key
+        )
         return client
     finally:
         # Restore proxy settings
