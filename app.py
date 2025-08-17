@@ -217,32 +217,19 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # Initialize session state
-if 'api_key' not in st.session_state:
-    st.session_state.api_key = ""
 if 'generated_images' not in st.session_state:
     st.session_state.generated_images = []
+
+# Get API key from Streamlit secrets
+api_key = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key=api_key)
 
 # Sidebar Configuration
 with st.sidebar:
     st.markdown("## ⚙️ Configuration")
     
-    api_key = st.text_input(
-        "OpenAI API Key",
-        type="password",
-        value=st.session_state.api_key,
-        help="Enter your OpenAI API key to generate images"
-    )
-    
-    if api_key:
-        st.session_state.api_key = api_key
-        # Fix for proxy error in Streamlit Cloud
-        try:
-            client = OpenAI(api_key=api_key)
-        except TypeError:
-            # Fallback if there's a proxy issue
-            import os
-            os.environ['OPENAI_API_KEY'] = api_key
-            client = OpenAI()
+    st.markdown("### 🔑 API Status")
+    st.success("✅ API Key Configured")
     
     st.markdown("---")
     
@@ -293,7 +280,7 @@ with tab1:
     col1, col2 = st.columns(2)
     
     with col1:
-        # Model Selection - INCLUDING gpt-image-1
+        # Model Selection
         models = {
             "gpt-image-1": "OpenAI (GPT Image 1)",
             "dall-e-3": "DALL·E 3 (Best Quality)",
@@ -359,7 +346,7 @@ with tab2:
             help="File format for downloads"
         )
         
-        # FIX: Response format handling for different models
+        # Response format handling
         if model in ["dall-e-2", "dall-e-3"]:
             response_format = st.selectbox(
                 "Response Format",
@@ -367,9 +354,9 @@ with tab2:
                 help="URL format is faster, Base64 is more reliable"
             )
         else:
-            # gpt-image-1 ALWAYS returns base64, no parameter needed
+            # gpt-image-1 info
             st.info("gpt-image-1 always returns base64-encoded images")
-            response_format = None  # Don't send this parameter for gpt-image-1
+            response_format = None  # Don't set this for gpt-image-1
     
     with col2:
         enhance_prompt = st.checkbox(
@@ -407,14 +394,12 @@ if prompt and enhance_prompt:
 
 # Generate button
 if st.button("🎨 Generate Image", type="primary", use_container_width=True):
-    if not st.session_state.api_key:
-        st.error("⚠️ Please enter your OpenAI API key in the sidebar")
-    elif not prompt:
+    if not prompt:
         st.error("⚠️ Please enter a prompt")
     else:
         with st.spinner("🎨 Creating your image..."):
             try:
-                # FIX: Build parameters correctly for each model
+                # Build parameters for API call
                 params = {
                     "model": model,
                     "prompt": enhanced_prompt,
@@ -422,21 +407,21 @@ if st.button("🎨 Generate Image", type="primary", use_container_width=True):
                     "n": num_images
                 }
                 
-                # Add model-specific parameters
+                # Add quality for dall-e-3
                 if model == "dall-e-3":
                     params["quality"] = quality
                     if style_option:
                         params["style"] = style_option
                 
-                # FIX: Only add response_format for dall-e models, NOT for gpt-image-1
-                if model in ["dall-e-2", "dall-e-3"] and response_format:
+                # CRITICAL FIX: Only add response_format for dall-e models
+                if model in ["dall-e-2", "dall-e-3"]:
                     params["response_format"] = response_format
-                # gpt-image-1 doesn't accept response_format parameter at all
+                # DO NOT add response_format for gpt-image-1
                 
                 # Generate image
                 response = client.images.generate(**params)
                 
-                # FIX: Process generated images with proper base64 handling
+                # Process generated images
                 for img_data in response.data:
                     image_info = {
                         'prompt': enhanced_prompt,
@@ -445,22 +430,16 @@ if st.button("🎨 Generate Image", type="primary", use_container_width=True):
                         'format': output_format
                     }
                     
-                    # FIX: Handle different response types
+                    # Handle base64 response (for gpt-image-1 or b64_json format)
                     if hasattr(img_data, 'b64_json') and img_data.b64_json:
-                        # gpt-image-1 always returns base64, or if b64_json was selected for dall-e
-                        image_info['b64_json'] = img_data.b64_json
                         # Decode base64 to PIL Image
                         img_bytes = base64.b64decode(img_data.b64_json)
                         image_info['image'] = Image.open(BytesIO(img_bytes))
                     elif hasattr(img_data, 'url') and img_data.url:
-                        # URL format for dall-e models
+                        # Download from URL
+                        response_img = requests.get(img_data.url)
+                        image_info['image'] = Image.open(BytesIO(response_img.content))
                         image_info['url'] = img_data.url
-                        # Download image for display
-                        img_response = requests.get(img_data.url)
-                        image_info['image'] = Image.open(BytesIO(img_response.content))
-                    else:
-                        st.error("Unexpected response format from API")
-                        continue
                     
                     st.session_state.generated_images.append(image_info)
                 
@@ -473,8 +452,6 @@ if st.button("🎨 Generate Image", type="primary", use_container_width=True):
                 
                 if "404" in error_msg or "does not exist" in error_msg:
                     st.info("The selected model may not be available. Try using dall-e-3 or dall-e-2.")
-                elif "response_format" in error_msg:
-                    st.info("Response format error. Note: gpt-image-1 doesn't support the response_format parameter.")
                 else:
                     st.info("Please check your API key and permissions.")
 
@@ -488,7 +465,7 @@ if st.session_state.generated_images:
         
         with col1:
             try:
-                # FIX: Display the PIL Image object directly
+                # Display the image (now stored as PIL Image)
                 if 'image' in img_data:
                     st.image(img_data['image'], caption=f"Image {idx + 1} ({img_data['model']})", use_column_width=True)
                 else:
@@ -524,6 +501,16 @@ if st.session_state.generated_images:
                     )
             except Exception as e:
                 st.error(f"Download unavailable: {str(e)}")
+
+# History Section
+with st.expander("📜 Generation History"):
+    if st.session_state.generated_images:
+        for idx, img_data in enumerate(reversed(st.session_state.generated_images[-5:])):
+            st.text(f"Prompt {len(st.session_state.generated_images) - idx}: {img_data['prompt'][:50]}...")
+            st.caption(f"Model: {img_data['model']} | Size: {img_data['size']}")
+            st.markdown("---")
+    else:
+        st.info("No images generated yet")
 
 # Footer
 st.markdown("""
