@@ -247,7 +247,7 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
         try:
             with st.spinner("🎨 Creating your masterpiece... This may take a moment..."):
                 # Initialize OpenAI client with validated API key
-                client = OpenAI(api_key=api_key.strip())
+                client = OpenAI(api_key=api_key)
                 
                 # Prepare parameters based on model
                 params = {
