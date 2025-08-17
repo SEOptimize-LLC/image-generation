@@ -148,18 +148,14 @@ st.markdown("""
         box-shadow: var(--shadow-sm);
     }
     
-    /* Sidebar styling - ALIGNED TO TOP */
+    /* Sidebar styling - NO PADDING, START AT TOP */
     section[data-testid="stSidebar"] {
         background: white;
         border-right: 1px solid var(--border-color);
     }
     
-    section[data-testid="stSidebar"] > div {
-        padding-top: 2.5rem !important;  /* Align with main header */
-    }
-    
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 0 !important;
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 2.5rem !important;
     }
     
     /* Success/Error/Info messages */
@@ -238,9 +234,9 @@ if 'api_key' not in st.session_state:
 if 'generated_images' not in st.session_state:
     st.session_state.generated_images = []
 
-# Sidebar - NO LOGO, CONTENT STARTS AT TOP
+# Sidebar - NO LOGO AT ALL
 with st.sidebar:
-    # Configuration Section - NOW AT THE TOP
+    # Configuration Section STARTS IMMEDIATELY
     st.markdown("### ⚙️ Configuration")
     
     if not st.session_state.api_key:
@@ -298,7 +294,7 @@ with st.sidebar:
     st.markdown("""
     **Models:**
     - **gpt-image-1**: Latest, up to 10 images
-    - **DALL-E 3**: Proven quality
+    - **DALL-E 3**: Proven quality, 1 image
     
     [🌐 SEOptimize LLC](https://seoptimizellc.com)
     """)
@@ -315,21 +311,19 @@ prompt = st.text_area(
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # Determine max images based on model
+    # Handle number of images based on model
     if model_choice == "gpt-image-1":
-        max_images = 10
-        default_value = 1
-    else:  # dall-e-3
-        max_images = 1
-        default_value = 1
-    
-    num_images = st.slider(
-        "Number of images",
-        min_value=1,
-        max_value=max_images,
-        value=default_value,
-        key=f"num_images_{model_choice}"  # Unique key per model
-    )
+        num_images = st.slider(
+            "Number of images",
+            min_value=1,
+            max_value=10,
+            value=1,
+            key=f"num_images_{model_choice}"
+        )
+    else:  # dall-e-3 - can only generate 1 image
+        num_images = 1
+        st.markdown("**Number of images**")
+        st.info("1 (DALL-E 3 limit)")
 
 with col2:
     quality_steps = st.slider(
@@ -381,7 +375,7 @@ with st.expander("🔧 Advanced Settings"):
                 options=["png", "jpeg", "webp"],
                 index=0
             )
-            style_param = None  # Not used for gpt-image-1
+            style_param = None
         else:
             image_size = st.selectbox(
                 "Image Size",
@@ -463,17 +457,8 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                 full_prompt += f" [seed:{seed}]"
             
             with st.spinner(f"Creating {num_images} image(s)..."):
-                # Initialize client without any proxy parameters
-                try:
-                    client = OpenAI(
-                        api_key=st.session_state.api_key,
-                        # Don't pass any proxy parameters
-                    )
-                except TypeError:
-                    # Fallback if there's an issue with initialization
-                    import openai
-                    openai.api_key = st.session_state.api_key
-                    client = OpenAI(api_key=st.session_state.api_key)
+                # Simple client initialization
+                client = OpenAI(api_key=st.session_state.api_key)
                 
                 generated_images = []
                 
@@ -487,7 +472,7 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                         'n': num_images
                     }
                     
-                    # Only add optional params if they exist and are not defaults
+                    # Add optional params
                     if output_format:
                         params['response_format'] = output_format
                     if background_option and background_option != "default":
@@ -505,8 +490,8 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                                 'format': output_format
                             })
                     except Exception as batch_error:
-                        # Try individual generation if batch fails
-                        st.warning("Batch generation not available, generating individually...")
+                        # Fallback to individual generation
+                        st.warning("Generating images individually...")
                         params['n'] = 1
                         for i in range(num_images):
                             response = client.images.generate(**params)
@@ -517,40 +502,34 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                                 'format': output_format
                             })
                 else:
-                    # DALL-E 3 generation (always individual)
-                    for i in range(num_images):
-                        params = {
-                            'model': model_choice,
-                            'prompt': full_prompt,
-                            'size': image_size,
-                            'quality': image_quality,
-                            'n': 1
-                        }
-                        
-                        if style_param:
-                            params['style'] = style_param
-                        
-                        response = client.images.generate(**params)
-                        generated_images.append({
-                            'url': response.data[0].url,
-                            'prompt': full_prompt,
-                            'model': model_choice,
-                            'format': 'png'
-                        })
+                    # DALL-E 3 generation
+                    params = {
+                        'model': model_choice,
+                        'prompt': full_prompt,
+                        'size': image_size,
+                        'quality': image_quality,
+                        'n': 1
+                    }
+                    
+                    if style_param:
+                        params['style'] = style_param
+                    
+                    response = client.images.generate(**params)
+                    generated_images.append({
+                        'url': response.data[0].url,
+                        'prompt': full_prompt,
+                        'model': model_choice,
+                        'format': 'png'
+                    })
                 
                 st.session_state.generated_images = generated_images
                 st.success(f"✅ Successfully generated {len(generated_images)} image(s)!")
                 
         except Exception as e:
             error_msg = str(e)
-            if "proxies" in error_msg:
-                st.error("❌ API initialization error. Please check your OpenAI library version.")
-                st.info("Try updating: pip install --upgrade openai")
-            elif "model" in error_msg.lower():
-                st.error(f"❌ Model access error: {error_msg}")
-                st.info("Try using dall-e-3 if gpt-image-1 is not available for your account.")
-            else:
-                st.error(f"❌ Error: {error_msg}")
+            st.error(f"❌ Error: {error_msg}")
+            if "api" in error_msg.lower() or "key" in error_msg.lower():
+                st.info("Please check your API key is valid and has image generation permissions.")
 
 # Display Generated Images
 if st.session_state.generated_images:
