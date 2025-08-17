@@ -1,9 +1,62 @@
 [theme]
+# Primary accent color for interactive elements
 primaryColor = "#ef4444"
+
+# Background color for the main content area
 backgroundColor = "#ffffff"
+
+# Background color for sidebar and most interactive widgets
 secondaryBackgroundColor = "#f0f2f6"
+
+# Color used for almost all text
 textColor = "#262730"
+
+# Font family for all text in the app
 font = "sans serif"
 
 [server]
+# Max size, in MB, for files uploaded with the file uploader
 maxUploadSize = 10
+
+# Enables support for websocket compression
+enableWebsocketCompression = true
+
+# Enable serving files from a static directory
+enableStaticServing = false
+
+# Port where the server will listen for browser connections
+port = 8501
+
+[browser]
+# Internet address where users should point their browsers to connect to the app
+serverAddress = "localhost"
+
+# Whether to send usage statistics to Streamlit
+gatherUsageStats = true
+
+# Port where the browser should connect to the server
+serverPort = 8501
+
+[runner]
+# Allows you to type a variable or string by itself in a single line of Python code to write it to the app
+magicEnabled = true
+
+# Install a Python tracer to allow you to stop or pause your script at any point and interact with it
+installTracer = false
+
+# Sets the MPLBACKEND environment variable to Agg inside Streamlit to prevent Python crashing
+fixMatplotlib = true
+
+[client]
+# Whether to enable st.cache
+caching = true
+
+# If false, makes your Streamlit script not draw to a Streamlit app
+displayEnabled = true
+
+# Controls whether uncaught app exceptions are displayed in the browser
+showErrorDetails = true
+
+[deprecation]
+# Set to false to disable the deprecation warning for using the global pyplot instance
+showPyplotGlobalUse = false
