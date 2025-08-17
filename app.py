@@ -148,10 +148,18 @@ st.markdown("""
         box-shadow: var(--shadow-sm);
     }
     
-    /* Sidebar styling */
+    /* Sidebar styling - ALIGNED TO TOP */
     section[data-testid="stSidebar"] {
         background: white;
         border-right: 1px solid var(--border-color);
+    }
+    
+    section[data-testid="stSidebar"] > div {
+        padding-top: 2.5rem !important;  /* Align with main header */
+    }
+    
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 0 !important;
     }
     
     /* Success/Error/Info messages */
@@ -208,19 +216,6 @@ st.markdown("""
     .footer a:hover {
         text-decoration: underline;
     }
-    
-    /* Sidebar brand */
-    .sidebar-brand {
-        text-align: center;
-        padding: 1.5rem 0;
-        margin-bottom: 1.5rem;
-        border-bottom: 2px solid #f0f0f0;
-    }
-    
-    .sidebar-brand-text {
-        font-size: 1.5rem;
-        font-weight: 700;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -243,17 +238,9 @@ if 'api_key' not in st.session_state:
 if 'generated_images' not in st.session_state:
     st.session_state.generated_images = []
 
-# Sidebar
+# Sidebar - NO LOGO, CONTENT STARTS AT TOP
 with st.sidebar:
-    st.markdown("""
-        <div class="sidebar-brand">
-            <div class="sidebar-brand-text">
-                <span class="brand-seo">SEO</span><span class="brand-optimize">ptimize</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Configuration Section
+    # Configuration Section - NOW AT THE TOP
     st.markdown("### ⚙️ Configuration")
     
     if not st.session_state.api_key:
