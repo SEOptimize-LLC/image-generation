@@ -1,9 +1,15 @@
 import streamlit as st
-from openai import OpenAI
 import requests
 from PIL import Image
 from io import BytesIO
 import os
+
+# Import OpenAI with error handling
+try:
+    from openai import OpenAI
+except ImportError:
+    st.error("OpenAI library not installed. Please install it with: pip install openai")
+    st.stop()
 
 # Page configuration
 st.set_page_config(
@@ -457,8 +463,30 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                 full_prompt += f" [seed:{seed}]"
             
             with st.spinner(f"Creating {num_images} image(s)..."):
-                # Simple client initialization
-                client = OpenAI(api_key=st.session_state.api_key)
+                # Clean initialization - remove any proxy-related environment variables
+                env_backup = {}
+                proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
+                for var in proxy_vars:
+                    if var in os.environ:
+                        env_backup[var] = os.environ[var]
+                        del os.environ[var]
+                
+                try:
+                    # Initialize client with only the API key
+                    client = OpenAI(
+                        api_key=st.session_state.api_key,
+                        max_retries=1,
+                        timeout=60.0
+                    )
+                except Exception as init_error:
+                    # If initialization fails, try without any parameters except api_key
+                    import openai
+                    openai.api_key = st.session_state.api_key
+                    client = openai.OpenAI(api_key=st.session_state.api_key)
+                
+                # Restore environment variables
+                for var, value in env_backup.items():
+                    os.environ[var] = value
                 
                 generated_images = []
                 
@@ -472,7 +500,7 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                         'n': num_images
                     }
                     
-                    # Add optional params
+                    # Add optional params only if they're not None
                     if output_format:
                         params['response_format'] = output_format
                     if background_option and background_option != "default":
@@ -528,8 +556,10 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
         except Exception as e:
             error_msg = str(e)
             st.error(f"❌ Error: {error_msg}")
-            if "api" in error_msg.lower() or "key" in error_msg.lower():
-                st.info("Please check your API key is valid and has image generation permissions.")
+            if "gpt-image-1" in error_msg.lower():
+                st.info("The gpt-image-1 model may not be available. Please try using dall-e-3 instead.")
+            else:
+                st.info("Please check your API key and ensure it has image generation permissions.")
 
 # Display Generated Images
 if st.session_state.generated_images:
