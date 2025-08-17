@@ -28,17 +28,32 @@ git clone https://github.com/yourusername/fast-ai-image-generator.git
 cd fast-ai-image-generator
 ```
 
-2. Install dependencies:
+2. **Quick Setup (Recommended):**
+   - **Unix/macOS:** Run `bash setup.sh`
+   - **Windows:** Run `setup.bat`
+   
+   Or manually:
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Run the app:
+4. Configure your API key in `.streamlit/secrets.toml`:
+```toml
+OPENAI_API_KEY = "sk-your-api-key-here"
+```
+
+5. Run the app:
 ```bash
 streamlit run app.py
 ```
 
-4. Open your browser and navigate to `http://localhost:8501`
+6. Open your browser and navigate to `http://localhost:8501`
+
+### Deployment to Streamlit Cloud
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 
 ### Deployment to Streamlit Cloud
 
@@ -164,22 +179,22 @@ Check [OpenAI's pricing page](https://openai.com/pricing) for current rates.
 - **HTTP Requests**: Requests library
 - **Security**: Streamlit Secrets for API key management
 
-- **Frontend**: Streamlit
-- **Image Generation**: OpenAI DALL-E 3 API
-- **Image Processing**: Pillow (PIL)
-- **HTTP Requests**: Requests library
-
 ## 📝 Project Structure
 
 ```
 fast-ai-image-generator/
 │
-├── app.py                 # Main Streamlit application
-├── requirements.txt       # Python dependencies
-├── README.md             # Project documentation
-├── .gitignore            # Git ignore file
-└── .streamlit/           # Streamlit configuration
-    └── config.toml       # Streamlit config settings
+├── app.py                      # Main Streamlit application
+├── requirements.txt            # Python dependencies
+├── README.md                   # Project documentation
+├── DEPLOYMENT.md              # Deployment guide
+├── setup.sh                   # Unix/macOS setup script
+├── setup.bat                  # Windows setup script
+├── .gitignore                 # Git ignore file
+└── .streamlit/                # Streamlit configuration
+    ├── config.toml            # Theme and app settings
+    ├── secrets.toml.example   # Example secrets file
+    └── secrets.toml           # Your API keys (create this, don't commit!)
 ```
 
 ## ⚙️ Streamlit Configuration
@@ -220,9 +235,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🐛 Known Issues
 
+- gpt-image-1 may require organization verification for some accounts
 - DALL-E 3 only supports generating 1 image per API call (batch generation makes multiple calls)
 - Some style modifiers may conflict with certain prompts
 - Rate limits apply based on your OpenAI account tier
+- Image generation costs vary based on model, quality, and size settings
 
 ## 📧 Support
 
@@ -230,15 +247,19 @@ For support, please open an issue in the GitHub repository or contact [your-emai
 
 ## 🔮 Future Enhancements
 
-- [ ] Image editing capabilities
+- [ ] Image editing capabilities (using gpt-image-1's edit features)
+- [ ] Image variations generation
 - [ ] Prompt history and favorites
-- [ ] Gallery of generated images
+- [ ] Gallery of generated images with database storage
 - [ ] Integration with other AI models
 - [ ] Image-to-image generation
 - [ ] Prompt templates library
-- [ ] Export to various formats
+- [ ] Export to various formats (WebP, AVIF)
 - [ ] Social sharing features
+- [ ] Cost tracking and usage analytics
+- [ ] Custom style presets
+- [ ] Bulk download functionality
 
 ---
 
-Made with ❤️ using Streamlit and OpenAI DALL-E 3
+Made with ❤️ using Streamlit and OpenAI's gpt-image-1 & DALL-E 3 APIs
