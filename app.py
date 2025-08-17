@@ -52,7 +52,7 @@ st.markdown("""
 
 # Title
 st.markdown("# ✨ Fast AI Image Generator ✨")
-st.markdown("Generate AI images with OpenAI's latest gpt-image-1 model", unsafe_allow_html=True)
+st.markdown("Generate AI images with OpenAI's latest image generation models", unsafe_allow_html=True)
 
 # Initialize session state
 if 'api_key' not in st.session_state:
@@ -126,11 +126,14 @@ with st.sidebar:
     - Higher quality outputs
     - Better text rendering
     - Multiple images per request
+    - WebP format support
+    - Compression control
     
     **DALL-E 3**
     - Previous generation
     - Still very capable
     - Single image per request
+    - Style modes (vivid/natural)
     
     [API Documentation](https://platform.openai.com/docs/guides/image-generation)
     """)
@@ -190,7 +193,7 @@ with col3:
         max_value=10.0,
         value=7.5,
         step=0.5,
-        help="How closely to follow the prompt (affects style parameter)"
+        help="How closely to follow the prompt"
     )
 
 # Art style dropdown
@@ -217,32 +220,65 @@ art_style = st.selectbox(
     help="Select the artistic style for your image"
 )
 
-# Advanced Settings
+# Advanced Settings - DYNAMIC BASED ON MODEL
 with st.expander("🔧 Advanced Settings"):
     adv_col1, adv_col2 = st.columns(2)
     
     with adv_col1:
-        image_size = st.selectbox(
-            "Image Size",
-            options=["1024x1024", "1792x1024", "1024x1792"],
-            index=0,
-            help="Select the resolution (square images generate faster)"
-        )
+        # Image Size - Different options for each model
+        if model_choice == "gpt-image-1":
+            image_size = st.selectbox(
+                "Image Size",
+                options=["1024x1024", "1536x1024", "1792x1024", "1024x1792"],
+                index=0,
+                help="Select the resolution (square images generate faster)"
+            )
+        else:  # DALL-E 3
+            image_size = st.selectbox(
+                "Image Size",
+                options=["1024x1024", "1792x1024", "1024x1792"],
+                index=0,
+                help="Select the resolution (square images generate faster)"
+            )
         
-        image_quality = st.radio(
-            "Image Quality",
-            options=["standard", "hd"],
-            index=1,
-            help="HD provides finer details but costs more and takes longer"
-        )
+        # Image Quality - Different options for each model
+        if model_choice == "gpt-image-1":
+            image_quality = st.radio(
+                "Image Quality",
+                options=["high", "medium", "low"],
+                index=0,
+                help="Higher quality provides better details but costs more"
+            )
+        else:  # DALL-E 3
+            image_quality = st.radio(
+                "Image Quality",
+                options=["standard", "hd"],
+                index=1,
+                help="HD provides finer details but costs more and takes longer"
+            )
         
-        # Style parameter (for both models)
-        style_param = st.radio(
-            "Style Mode",
-            options=["vivid", "natural"],
-            index=0 if prompt_adherence > 5 else 1,
-            help="Vivid: More dramatic and hyper-real | Natural: More realistic and subdued"
-        )
+        # Style parameter - ONLY for DALL-E 3
+        if model_choice == "dall-e-3":
+            style_param = st.radio(
+                "Style Mode",
+                options=["vivid", "natural"],
+                index=0,
+                help="Vivid: More dramatic and hyper-real | Natural: More realistic and subdued"
+            )
+        else:
+            style_param = None
+        
+        # Output Format - Different options for each model
+        if model_choice == "gpt-image-1":
+            output_format = st.selectbox(
+                "Output Format",
+                options=["png", "jpeg", "webp"],
+                index=0,
+                help="Choose the output image format (WebP offers better compression)"
+            )
+        else:  # DALL-E 3 typically only supports PNG
+            output_format = "png"
+            st.info("ℹ️ DALL-E 3 outputs PNG format")
     
     with adv_col2:
         negative_prompt = st.text_area(
@@ -260,15 +296,29 @@ with st.expander("🔧 Advanced Settings"):
             help="Use -1 for random, or set a specific seed for reproducibility"
         )
         
+        # gpt-image-1 specific parameters
         if model_choice == "gpt-image-1":
-            output_format = st.selectbox(
-                "Output Format",
-                options=["png", "jpeg"],
+            st.markdown("**gpt-image-1 Specific Settings:**")
+            
+            # Background parameter
+            background_option = st.selectbox(
+                "Background",
+                options=["default", "transparent", "white", "black"],
                 index=0,
-                help="Choose the output image format"
+                help="Set the background for images with transparency support"
+            )
+            
+            # Output Compression
+            output_compression = st.slider(
+                "Output Compression",
+                min_value=0,
+                max_value=100,
+                value=100,
+                help="0 = no compression, 100 = maximum compression"
             )
         else:
-            output_format = "png"  # DALL-E 3 default
+            background_option = None
+            output_compression = None
 
 # Style modification based on selection
 style_modifiers = {
@@ -313,47 +363,52 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                 
                 generated_images = []
                 
-                # For gpt-image-1, we can generate multiple images in one call
-                if model_choice == "gpt-image-1" and num_images > 1:
+                # Build parameters based on model
+                if model_choice == "gpt-image-1":
+                    # gpt-image-1 parameters
+                    params = {
+                        'model': model_choice,
+                        'prompt': full_prompt,
+                        'size': image_size,
+                        'quality': image_quality,
+                        'n': num_images,
+                        'response_format': output_format
+                    }
+                    
+                    # Add optional parameters if not default
+                    if background_option != "default":
+                        params['background'] = background_option
+                    if output_compression != 100:
+                        params['output_compression'] = output_compression
+                    
                     try:
-                        response = client.images.generate(
-                            model=model_choice,
-                            prompt=full_prompt,
-                            size=image_size,
-                            quality=image_quality,
-                            style=style_param,
-                            n=num_images,
-                            response_format=output_format
-                        )
+                        response = client.images.generate(**params)
                         
                         for img_data in response.data:
                             generated_images.append({
                                 'url': img_data.url,
                                 'prompt': full_prompt,
                                 'revised_prompt': getattr(img_data, 'revised_prompt', full_prompt),
-                                'model': model_choice
+                                'model': model_choice,
+                                'format': output_format
                             })
                     except Exception as e:
                         # Fallback to individual requests if batch fails
                         st.warning("Batch generation failed, generating individually...")
+                        params['n'] = 1
                         for i in range(num_images):
-                            response = client.images.generate(
-                                model=model_choice,
-                                prompt=full_prompt,
-                                size=image_size,
-                                quality=image_quality,
-                                style=style_param,
-                                n=1
-                            )
+                            response = client.images.generate(**params)
                             
                             generated_images.append({
                                 'url': response.data[0].url,
                                 'prompt': full_prompt,
                                 'revised_prompt': getattr(response.data[0], 'revised_prompt', full_prompt),
-                                'model': model_choice
+                                'model': model_choice,
+                                'format': output_format
                             })
-                else:
-                    # For DALL-E 3 or single image requests
+                
+                else:  # DALL-E 3
+                    # DALL-E 3 requires individual requests
                     for i in range(num_images):
                         params = {
                             'model': model_choice,
@@ -363,8 +418,8 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                             'n': 1
                         }
                         
-                        # Add style parameter for models that support it
-                        if model_choice == "dall-e-3":
+                        # Add style parameter for DALL-E 3
+                        if style_param:
                             params['style'] = style_param
                         
                         response = client.images.generate(**params)
@@ -373,7 +428,8 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                             'url': response.data[0].url,
                             'prompt': full_prompt,
                             'revised_prompt': getattr(response.data[0], 'revised_prompt', full_prompt),
-                            'model': model_choice
+                            'model': model_choice,
+                            'format': 'png'
                         })
                 
                 st.session_state.generated_images = generated_images
@@ -427,27 +483,39 @@ if st.session_state.generated_images:
             # Download button
             try:
                 img_bytes = BytesIO()
-                # Determine format based on output_format if available
-                save_format = 'PNG' if output_format == 'png' else 'JPEG'
-                img.save(img_bytes, format=save_format)
+                # Determine format based on the actual format used
+                file_format = img_data.get('format', 'png')
+                
+                if file_format == 'webp':
+                    # Save as WebP
+                    img.save(img_bytes, format='WEBP', quality=95)
+                    mime_type = "image/webp"
+                elif file_format == 'jpeg':
+                    img.save(img_bytes, format='JPEG', quality=95)
+                    mime_type = "image/jpeg"
+                else:  # PNG
+                    img.save(img_bytes, format='PNG')
+                    mime_type = "image/png"
+                
                 img_bytes = img_bytes.getvalue()
                 
                 st.download_button(
                     label=f"⬇️ Download",
                     data=img_bytes,
-                    file_name=f"generated_{img_data['model']}_{idx + 1}.{output_format if model_choice == 'gpt-image-1' else 'png'}",
-                    mime=f"image/{output_format if model_choice == 'gpt-image-1' else 'png'}",
+                    file_name=f"generated_{img_data['model']}_{idx + 1}.{file_format}",
+                    mime=mime_type,
                     key=f"download_{idx}"
                 )
-            except:
-                st.error("Download unavailable")
+            except Exception as e:
+                st.error(f"Download error: {str(e)}")
 
 # Footer
 st.markdown("---")
 st.markdown(
     f"""
     <div style='text-align: center; color: #888; padding: 1rem;'>
-    Built with Streamlit and OpenAI's {model_choice if 'model_choice' in locals() else 'gpt-image-1'} API<br>
+    Built with Streamlit and OpenAI's Image Generation API<br>
+    Current Model: {model_choice if 'model_choice' in locals() else 'gpt-image-1'}<br>
     <a href="https://platform.openai.com/docs/guides/image-generation" target="_blank">API Documentation</a> | 
     <a href="https://platform.openai.com/settings/organization/general" target="_blank">Verify Organization</a>
     </div>
