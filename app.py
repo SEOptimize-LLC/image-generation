@@ -5,6 +5,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 import base64
+import os
 
 # Page configuration
 st.set_page_config(
@@ -39,40 +40,111 @@ st.markdown("""
     .stSelectbox > div > div {
         border-radius: 8px;
     }
+    .info-box {
+        background-color: #fef3c7;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #f59e0b;
+        margin-bottom: 1rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # Title
 st.markdown("# ✨ Fast AI Image Generator ✨")
-st.markdown("Generate AI images with optimized Stable Diffusion", unsafe_allow_html=True)
+st.markdown("Generate AI images with OpenAI's latest gpt-image-1 model", unsafe_allow_html=True)
 
 # Initialize session state
 if 'api_key' not in st.session_state:
-    st.session_state.api_key = ""
+    # Check for API key in Streamlit secrets first (for deployment)
+    if "OPENAI_API_KEY" in st.secrets:
+        st.session_state.api_key = st.secrets["OPENAI_API_KEY"]
+    else:
+        st.session_state.api_key = ""
 if 'generated_images' not in st.session_state:
     st.session_state.generated_images = []
 
-# API Key input in sidebar
+# API Key configuration in sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
-    api_key = st.text_input(
-        "OpenAI API Key",
-        type="password",
-        value=st.session_state.api_key,
-        help="Enter your OpenAI API key to generate images"
+    
+    # API Key Management
+    if not st.session_state.api_key:
+        st.warning("⚠️ API Key Required")
+        
+        # Show instructions for Streamlit Secrets
+        with st.expander("📚 How to add API Key"):
+            st.markdown("""
+            **For Streamlit Cloud (Recommended):**
+            1. Go to your app's settings
+            2. Navigate to **Secrets** tab
+            3. Add the following:
+            ```toml
+            OPENAI_API_KEY = "sk-..."
+            ```
+            
+            **For temporary use:**
+            Enter your API key below (session only)
+            """)
+        
+        api_key = st.text_input(
+            "OpenAI API Key",
+            type="password",
+            placeholder="sk-...",
+            help="Enter your OpenAI API key"
+        )
+        if api_key:
+            st.session_state.api_key = api_key
+            st.rerun()
+    else:
+        st.success("✅ API Key configured")
+        if st.button("🔄 Change API Key"):
+            st.session_state.api_key = ""
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Model Selection
+    st.subheader("🤖 Model Selection")
+    model_choice = st.radio(
+        "Choose Model",
+        options=["gpt-image-1", "dall-e-3"],
+        index=0,
+        help="gpt-image-1 is the latest and most advanced model"
     )
-    if api_key:
-        st.session_state.api_key = api_key
-        client = OpenAI(api_key=api_key)
+    
+    if model_choice == "gpt-image-1":
+        st.info("💫 Using latest gpt-image-1 model with enhanced capabilities")
     
     st.markdown("---")
     st.markdown("### About")
     st.markdown("""
-    This app uses OpenAI's DALL-E 3 API to generate images based on your prompts.
+    This app uses OpenAI's image generation API:
     
-    **Note:** The interface mimics Stable Diffusion parameters for familiarity, 
-    but uses DALL-E 3 for generation.
+    **gpt-image-1** (Recommended)
+    - Latest multimodal model
+    - Higher quality outputs
+    - Better text rendering
+    - Multiple images per request
+    
+    **DALL-E 3**
+    - Previous generation
+    - Still very capable
+    - Single image per request
+    
+    [API Documentation](https://platform.openai.com/docs/guides/image-generation)
     """)
+
+# Check for organization verification notice
+if st.session_state.api_key and model_choice == "gpt-image-1":
+    with st.container():
+        st.markdown("""
+        <div class="info-box">
+        <b>📋 Note:</b> The gpt-image-1 model may require organization verification. 
+        If you encounter access issues, please verify your organization at 
+        <a href="https://platform.openai.com/settings/organization/general" target="_blank">OpenAI Settings</a>.
+        </div>
+        """, unsafe_allow_html=True)
 
 # Main content
 col1, col2 = st.columns([3, 1])
@@ -82,7 +154,7 @@ with col1:
         "Enter your image prompt:",
         value="A majestic golden retriever sitting in a sunlit meadow, photorealistic, highly detailed",
         height=100,
-        help="Describe the image you want to generate"
+        help="Describe the image you want to generate in detail"
     )
 
 with col2:
@@ -92,12 +164,14 @@ with col2:
 col1, col2, col3 = st.columns(3)
 
 with col1:
+    # Adjust max images based on model
+    max_images = 10 if model_choice == "gpt-image-1" else 1
     num_images = st.slider(
         "Number of images",
         min_value=1,
-        max_value=4,
+        max_value=max_images,
         value=1,
-        help="Number of images to generate (1-4)"
+        help=f"Generate up to {max_images} images" + (" (gpt-image-1 supports batch generation)" if max_images > 1 else " (DALL-E 3 limitation)")
     )
 
 with col2:
@@ -106,7 +180,7 @@ with col2:
         min_value=10,
         max_value=50,
         value=20,
-        help="Higher values = better quality but slower generation"
+        help="Visual indicator - actual quality set in Advanced Settings"
     )
 
 with col3:
@@ -116,7 +190,7 @@ with col3:
         max_value=10.0,
         value=7.5,
         step=0.5,
-        help="How closely to follow the prompt"
+        help="How closely to follow the prompt (affects style parameter)"
     )
 
 # Art style dropdown
@@ -134,7 +208,10 @@ art_style = st.selectbox(
         "Cartoon",
         "Photography",
         "Abstract",
-        "Surreal"
+        "Surreal",
+        "Minimalist",
+        "Vintage",
+        "Cyberpunk"
     ],
     index=0,
     help="Select the artistic style for your image"
@@ -149,20 +226,28 @@ with st.expander("🔧 Advanced Settings"):
             "Image Size",
             options=["1024x1024", "1792x1024", "1024x1792"],
             index=0,
-            help="Select the resolution of the generated image"
+            help="Select the resolution (square images generate faster)"
         )
         
         image_quality = st.radio(
             "Image Quality",
             options=["standard", "hd"],
             index=1,
-            help="HD quality provides more detail but costs more"
+            help="HD provides finer details but costs more and takes longer"
+        )
+        
+        # Style parameter (for both models)
+        style_param = st.radio(
+            "Style Mode",
+            options=["vivid", "natural"],
+            index=0 if prompt_adherence > 5 else 1,
+            help="Vivid: More dramatic and hyper-real | Natural: More realistic and subdued"
         )
     
     with adv_col2:
         negative_prompt = st.text_area(
             "Negative Prompt (optional)",
-            placeholder="Things to avoid in the image...",
+            placeholder="Things to avoid: blurry, low quality, distorted...",
             height=100,
             help="Describe what you don't want in the image"
         )
@@ -174,27 +259,41 @@ with st.expander("🔧 Advanced Settings"):
             value=-1,
             help="Use -1 for random, or set a specific seed for reproducibility"
         )
+        
+        if model_choice == "gpt-image-1":
+            output_format = st.selectbox(
+                "Output Format",
+                options=["png", "jpeg"],
+                index=0,
+                help="Choose the output image format"
+            )
+        else:
+            output_format = "png"  # DALL-E 3 default
 
 # Style modification based on selection
 style_modifiers = {
-    "Realistic": "photorealistic, highly detailed, professional photography",
-    "Artistic": "artistic, creative, expressive brushstrokes",
-    "Anime/Manga": "anime style, manga art, Japanese animation",
-    "Digital Art": "digital painting, concept art, trending on artstation",
-    "Oil Painting": "oil painting, classical art, museum quality",
-    "Watercolor": "watercolor painting, soft colors, artistic",
-    "Pencil Sketch": "pencil drawing, sketch art, detailed linework",
-    "3D Render": "3D rendered, octane render, unreal engine",
-    "Cartoon": "cartoon style, animated, colorful illustration",
-    "Photography": "professional photography, DSLR quality, bokeh",
-    "Abstract": "abstract art, modern art, creative composition",
-    "Surreal": "surrealist art, dreamlike, Salvador Dali style"
+    "Realistic": "photorealistic, highly detailed, professional photography, sharp focus",
+    "Artistic": "artistic, creative, expressive brushstrokes, masterpiece",
+    "Anime/Manga": "anime style, manga art, Japanese animation, cel shaded",
+    "Digital Art": "digital painting, concept art, trending on artstation, highly detailed",
+    "Oil Painting": "oil painting, classical art, museum quality, textured canvas",
+    "Watercolor": "watercolor painting, soft colors, artistic, flowing pigments",
+    "Pencil Sketch": "pencil drawing, sketch art, detailed linework, graphite",
+    "3D Render": "3D rendered, octane render, unreal engine, ray tracing",
+    "Cartoon": "cartoon style, animated, colorful illustration, cel animation",
+    "Photography": "professional photography, DSLR quality, bokeh, rule of thirds",
+    "Abstract": "abstract art, modern art, creative composition, non-representational",
+    "Surreal": "surrealist art, dreamlike, Salvador Dali style, impossible geometry",
+    "Minimalist": "minimalist, simple, clean lines, negative space, modern design",
+    "Vintage": "vintage style, retro, nostalgic, aged film, classic aesthetic",
+    "Cyberpunk": "cyberpunk, neon lights, futuristic, dystopian, tech noir"
 }
 
 # Generate button
 if st.button("🎨 Generate Images", type="primary", use_container_width=True):
     if not st.session_state.api_key:
-        st.error("⚠️ Please enter your OpenAI API key in the sidebar to generate images.")
+        st.error("⚠️ Please enter your OpenAI API key to generate images.")
+        st.info("💡 Add your API key in the sidebar or configure it in Streamlit Secrets.")
     else:
         try:
             # Combine prompt with style modifier
@@ -204,77 +303,153 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
             if negative_prompt:
                 full_prompt += f". Avoid: {negative_prompt}"
             
+            # Add seed to prompt if specified
+            if seed != -1:
+                full_prompt += f" [seed:{seed}]"
+            
             # Show loading state
-            with st.spinner(f"🎨 Generating {num_images} image(s)..."):
+            with st.spinner(f"🎨 Generating {num_images} image(s) with {model_choice}..."):
                 client = OpenAI(api_key=st.session_state.api_key)
                 
-                # Generate images
                 generated_images = []
-                for i in range(num_images):
-                    response = client.images.generate(
-                        model="dall-e-3",
-                        prompt=full_prompt,
-                        size=image_size,
-                        quality=image_quality,
-                        n=1  # DALL-E 3 only supports n=1
-                    )
-                    
-                    image_url = response.data[0].url
-                    generated_images.append({
-                        'url': image_url,
-                        'prompt': full_prompt,
-                        'revised_prompt': response.data[0].revised_prompt
-                    })
+                
+                # For gpt-image-1, we can generate multiple images in one call
+                if model_choice == "gpt-image-1" and num_images > 1:
+                    try:
+                        response = client.images.generate(
+                            model=model_choice,
+                            prompt=full_prompt,
+                            size=image_size,
+                            quality=image_quality,
+                            style=style_param,
+                            n=num_images,
+                            response_format=output_format
+                        )
+                        
+                        for img_data in response.data:
+                            generated_images.append({
+                                'url': img_data.url,
+                                'prompt': full_prompt,
+                                'revised_prompt': getattr(img_data, 'revised_prompt', full_prompt),
+                                'model': model_choice
+                            })
+                    except Exception as e:
+                        # Fallback to individual requests if batch fails
+                        st.warning("Batch generation failed, generating individually...")
+                        for i in range(num_images):
+                            response = client.images.generate(
+                                model=model_choice,
+                                prompt=full_prompt,
+                                size=image_size,
+                                quality=image_quality,
+                                style=style_param,
+                                n=1
+                            )
+                            
+                            generated_images.append({
+                                'url': response.data[0].url,
+                                'prompt': full_prompt,
+                                'revised_prompt': getattr(response.data[0], 'revised_prompt', full_prompt),
+                                'model': model_choice
+                            })
+                else:
+                    # For DALL-E 3 or single image requests
+                    for i in range(num_images):
+                        params = {
+                            'model': model_choice,
+                            'prompt': full_prompt,
+                            'size': image_size,
+                            'quality': image_quality,
+                            'n': 1
+                        }
+                        
+                        # Add style parameter for models that support it
+                        if model_choice == "dall-e-3":
+                            params['style'] = style_param
+                        
+                        response = client.images.generate(**params)
+                        
+                        generated_images.append({
+                            'url': response.data[0].url,
+                            'prompt': full_prompt,
+                            'revised_prompt': getattr(response.data[0], 'revised_prompt', full_prompt),
+                            'model': model_choice
+                        })
                 
                 st.session_state.generated_images = generated_images
-                st.success(f"✅ Successfully generated {num_images} image(s)!")
+                st.success(f"✅ Successfully generated {len(generated_images)} image(s) using {model_choice}!")
                 
+        except openai.AuthenticationError:
+            st.error("❌ Authentication failed. Please check your API key.")
+            st.info("💡 Make sure your API key is valid and has the necessary permissions.")
+        except openai.PermissionDeniedError:
+            st.error("❌ Permission denied. Your organization may need verification.")
+            st.info("""
+            📋 To use gpt-image-1, you may need to:
+            1. Verify your organization at https://platform.openai.com/settings/organization/general
+            2. Ensure your API key has image generation permissions
+            3. Try using dall-e-3 model instead
+            """)
         except Exception as e:
             st.error(f"❌ Error generating images: {str(e)}")
-            if "api_key" in str(e).lower():
-                st.info("💡 Make sure your OpenAI API key is valid and has access to DALL-E 3.")
+            if "gpt-image-1" in str(e).lower():
+                st.info("💡 Try switching to dall-e-3 model in the sidebar if gpt-image-1 is not available.")
 
 # Display generated images
 if st.session_state.generated_images:
     st.markdown("---")
     st.markdown("### 🖼️ Generated Images")
     
+    # Display info about the generation
+    st.info(f"Generated using **{st.session_state.generated_images[0]['model']}** model")
+    
     for idx, img_data in enumerate(st.session_state.generated_images):
         col1, col2 = st.columns([3, 1])
         
         with col1:
             # Display image
-            response = requests.get(img_data['url'])
-            img = Image.open(BytesIO(response.content))
-            st.image(img, caption=f"Image {idx + 1}", use_column_width=True)
-            
-            # Show revised prompt in expander
-            with st.expander(f"📝 Prompt Details for Image {idx + 1}"):
-                st.markdown("**Your prompt:**")
-                st.text(img_data['prompt'])
-                st.markdown("**DALL-E 3 interpreted prompt:**")
-                st.text(img_data['revised_prompt'])
+            try:
+                response = requests.get(img_data['url'])
+                img = Image.open(BytesIO(response.content))
+                st.image(img, caption=f"Image {idx + 1} ({img_data['model']})", use_column_width=True)
+                
+                # Show revised prompt in expander
+                with st.expander(f"📝 Prompt Details for Image {idx + 1}"):
+                    st.markdown("**Your prompt:**")
+                    st.text(img_data['prompt'])
+                    if img_data['revised_prompt'] != img_data['prompt']:
+                        st.markdown("**AI interpreted prompt:**")
+                        st.text(img_data['revised_prompt'])
+            except Exception as e:
+                st.error(f"Failed to load image {idx + 1}: {str(e)}")
         
         with col2:
             # Download button
-            img_bytes = BytesIO()
-            img.save(img_bytes, format='PNG')
-            img_bytes = img_bytes.getvalue()
-            
-            st.download_button(
-                label=f"⬇️ Download",
-                data=img_bytes,
-                file_name=f"generated_image_{idx + 1}.png",
-                mime="image/png",
-                key=f"download_{idx}"
-            )
+            try:
+                img_bytes = BytesIO()
+                # Determine format based on output_format if available
+                save_format = 'PNG' if output_format == 'png' else 'JPEG'
+                img.save(img_bytes, format=save_format)
+                img_bytes = img_bytes.getvalue()
+                
+                st.download_button(
+                    label=f"⬇️ Download",
+                    data=img_bytes,
+                    file_name=f"generated_{img_data['model']}_{idx + 1}.{output_format if model_choice == 'gpt-image-1' else 'png'}",
+                    mime=f"image/{output_format if model_choice == 'gpt-image-1' else 'png'}",
+                    key=f"download_{idx}"
+                )
+            except:
+                st.error("Download unavailable")
 
 # Footer
 st.markdown("---")
 st.markdown(
-    """
+    f"""
     <div style='text-align: center; color: #888; padding: 1rem;'>
-    Built with Streamlit and OpenAI DALL-E 3 API
+    Built with Streamlit and OpenAI's {model_choice if 'model_choice' in locals() else 'gpt-image-1'} API<br>
+    <a href="https://platform.openai.com/docs/guides/image-generation" target="_blank">API Documentation</a> | 
+    <a href="https://platform.openai.com/settings/organization/general" target="_blank">Verify Organization</a>
     </div>
     """,
     unsafe_allow_html=True
