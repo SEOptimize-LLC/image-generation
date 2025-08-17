@@ -4,13 +4,6 @@ from PIL import Image
 from io import BytesIO
 import os
 
-# Import OpenAI with error handling
-try:
-    from openai import OpenAI
-except ImportError:
-    st.error("OpenAI library not installed. Please install it with: pip install openai")
-    st.stop()
-
 # Page configuration
 st.set_page_config(
     page_title="SEOptimize AI Image Generator",
@@ -282,16 +275,16 @@ with st.sidebar:
     st.markdown("### 🤖 Model Selection")
     model_choice = st.radio(
         "Choose Model",
-        options=["gpt-image-1", "dall-e-3"],
+        options=["dall-e-3", "dall-e-2"],
         index=0,
         help="Select the AI model for image generation",
         key="model_radio"
     )
     
-    if model_choice == "gpt-image-1":
-        st.markdown('<span class="info-badge">Latest Model</span>', unsafe_allow_html=True)
+    if model_choice == "dall-e-3":
+        st.markdown('<span class="info-badge">Latest DALL-E</span>', unsafe_allow_html=True)
     else:
-        st.markdown('<span class="info-badge">Classic Model</span>', unsafe_allow_html=True)
+        st.markdown('<span class="info-badge">DALL-E 2</span>', unsafe_allow_html=True)
     
     st.markdown("---")
     
@@ -299,8 +292,8 @@ with st.sidebar:
     st.markdown("### 📖 About")
     st.markdown("""
     **Models:**
-    - **gpt-image-1**: Latest, up to 10 images
-    - **DALL-E 3**: Proven quality, 1 image
+    - **DALL-E 3**: Latest, best quality
+    - **DALL-E 2**: Fast generation
     
     [🌐 SEOptimize LLC](https://seoptimizellc.com)
     """)
@@ -317,23 +310,14 @@ prompt = st.text_area(
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # Handle number of images based on model
-    if model_choice == "gpt-image-1":
-        num_images = st.slider(
-            "Number of images",
-            min_value=1,
-            max_value=10,
-            value=1,
-            key=f"num_images_{model_choice}"
-        )
-    else:  # dall-e-3 - can only generate 1 image
-        num_images = 1
-        st.markdown("**Number of images**")
-        st.info("1 (DALL-E 3 limit)")
+    # DALL-E models can only generate 1 image per call
+    num_images = 1
+    st.markdown("**Number of images**")
+    st.info("1 (API limit)")
 
 with col2:
     quality_steps = st.slider(
-        "Quality (steps)",
+        "Quality (visual)",
         min_value=10,
         max_value=50,
         value=20
@@ -365,24 +349,7 @@ with st.expander("🔧 Advanced Settings"):
     adv_col1, adv_col2 = st.columns(2)
     
     with adv_col1:
-        if model_choice == "gpt-image-1":
-            image_size = st.selectbox(
-                "Image Size",
-                options=["1024x1024", "1536x1024", "1792x1024", "1024x1792"],
-                index=0
-            )
-            image_quality = st.radio(
-                "Image Quality",
-                options=["high", "medium", "low"],
-                index=0
-            )
-            output_format = st.selectbox(
-                "Output Format",
-                options=["png", "jpeg", "webp"],
-                index=0
-            )
-            style_param = None
-        else:
+        if model_choice == "dall-e-3":
             image_size = st.selectbox(
                 "Image Size",
                 options=["1024x1024", "1792x1024", "1024x1792"],
@@ -398,7 +365,14 @@ with st.expander("🔧 Advanced Settings"):
                 options=["vivid", "natural"],
                 index=0
             )
-            output_format = "png"
+        else:  # dall-e-2
+            image_size = st.selectbox(
+                "Image Size",
+                options=["256x256", "512x512", "1024x1024"],
+                index=2
+            )
+            image_quality = "standard"
+            style_param = None
     
     with adv_col2:
         negative_prompt = st.text_area(
@@ -413,22 +387,6 @@ with st.expander("🔧 Advanced Settings"):
             max_value=999999999,
             value=-1
         )
-        
-        if model_choice == "gpt-image-1":
-            background_option = st.selectbox(
-                "Background",
-                options=["default", "transparent", "white", "black"],
-                index=0
-            )
-            output_compression = st.slider(
-                "Compression",
-                min_value=0,
-                max_value=100,
-                value=100
-            )
-        else:
-            background_option = None
-            output_compression = None
 
 # Style modifiers
 style_modifiers = {
@@ -451,7 +409,7 @@ style_modifiers = {
 
 # Generate Button
 st.markdown("<br>", unsafe_allow_html=True)
-if st.button("🎨 Generate Images", type="primary", use_container_width=True):
+if st.button("🎨 Generate Image", type="primary", use_container_width=True):
     if not st.session_state.api_key:
         st.error("⚠️ Please configure your OpenAI API key in the sidebar.")
     else:
@@ -462,109 +420,52 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
             if seed != -1:
                 full_prompt += f" [seed:{seed}]"
             
-            with st.spinner(f"Creating {num_images} image(s)..."):
-                # Clean initialization - remove any proxy-related environment variables
-                env_backup = {}
-                proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
-                for var in proxy_vars:
-                    if var in os.environ:
-                        env_backup[var] = os.environ[var]
-                        del os.environ[var]
+            with st.spinner(f"Creating image with {model_choice}..."):
+                # Import and use OpenAI in the simplest way possible
+                import openai
                 
-                try:
-                    # Initialize client with only the API key
-                    client = OpenAI(
-                        api_key=st.session_state.api_key,
-                        max_retries=1,
-                        timeout=60.0
-                    )
-                except Exception as init_error:
-                    # If initialization fails, try without any parameters except api_key
-                    import openai
-                    openai.api_key = st.session_state.api_key
-                    client = openai.OpenAI(api_key=st.session_state.api_key)
+                # Set the API key directly
+                openai.api_key = st.session_state.api_key
                 
-                # Restore environment variables
-                for var, value in env_backup.items():
-                    os.environ[var] = value
+                # Use the new client syntax
+                from openai import OpenAI
+                client = OpenAI(api_key=st.session_state.api_key)
                 
-                generated_images = []
+                # Build parameters
+                params = {
+                    'model': model_choice,
+                    'prompt': full_prompt,
+                    'n': 1,
+                    'size': image_size
+                }
                 
-                if model_choice == "gpt-image-1":
-                    # Build params for gpt-image-1
-                    params = {
-                        'model': model_choice,
-                        'prompt': full_prompt,
-                        'size': image_size,
-                        'quality': image_quality,
-                        'n': num_images
-                    }
-                    
-                    # Add optional params only if they're not None
-                    if output_format:
-                        params['response_format'] = output_format
-                    if background_option and background_option != "default":
-                        params['background'] = background_option
-                    if output_compression is not None and output_compression != 100:
-                        params['output_compression'] = output_compression
-                    
-                    try:
-                        response = client.images.generate(**params)
-                        for img_data in response.data:
-                            generated_images.append({
-                                'url': img_data.url,
-                                'prompt': full_prompt,
-                                'model': model_choice,
-                                'format': output_format
-                            })
-                    except Exception as batch_error:
-                        # Fallback to individual generation
-                        st.warning("Generating images individually...")
-                        params['n'] = 1
-                        for i in range(num_images):
-                            response = client.images.generate(**params)
-                            generated_images.append({
-                                'url': response.data[0].url,
-                                'prompt': full_prompt,
-                                'model': model_choice,
-                                'format': output_format
-                            })
-                else:
-                    # DALL-E 3 generation
-                    params = {
-                        'model': model_choice,
-                        'prompt': full_prompt,
-                        'size': image_size,
-                        'quality': image_quality,
-                        'n': 1
-                    }
-                    
+                # Add model-specific parameters
+                if model_choice == "dall-e-3":
+                    params['quality'] = image_quality
                     if style_param:
                         params['style'] = style_param
-                    
-                    response = client.images.generate(**params)
-                    generated_images.append({
-                        'url': response.data[0].url,
-                        'prompt': full_prompt,
-                        'model': model_choice,
-                        'format': 'png'
-                    })
                 
-                st.session_state.generated_images = generated_images
-                st.success(f"✅ Successfully generated {len(generated_images)} image(s)!")
+                # Generate image
+                response = client.images.generate(**params)
+                
+                # Store the generated image
+                st.session_state.generated_images = [{
+                    'url': response.data[0].url,
+                    'prompt': full_prompt,
+                    'model': model_choice
+                }]
+                
+                st.success(f"✅ Image generated successfully!")
                 
         except Exception as e:
             error_msg = str(e)
             st.error(f"❌ Error: {error_msg}")
-            if "gpt-image-1" in error_msg.lower():
-                st.info("The gpt-image-1 model may not be available. Please try using dall-e-3 instead.")
-            else:
-                st.info("Please check your API key and ensure it has image generation permissions.")
+            st.info("Please check your API key is valid and has image generation permissions.")
 
 # Display Generated Images
 if st.session_state.generated_images:
     st.markdown("---")
-    st.markdown("### 🖼️ Generated Images")
+    st.markdown("### 🖼️ Generated Image")
     
     for idx, img_data in enumerate(st.session_state.generated_images):
         col1, col2 = st.columns([4, 1])
@@ -573,32 +474,21 @@ if st.session_state.generated_images:
             try:
                 response = requests.get(img_data['url'])
                 img = Image.open(BytesIO(response.content))
-                st.image(img, caption=f"Image {idx + 1}", use_column_width=True)
+                st.image(img, caption=f"Generated with {img_data['model']}", use_column_width=True)
             except:
-                st.error(f"Could not load image {idx + 1}")
+                st.error("Could not load image")
         
         with col2:
             try:
                 img_bytes = BytesIO()
-                file_format = img_data.get('format', 'png')
-                
-                if file_format == 'webp':
-                    img.save(img_bytes, format='WEBP', quality=95)
-                    mime_type = "image/webp"
-                elif file_format == 'jpeg':
-                    img.save(img_bytes, format='JPEG', quality=95)
-                    mime_type = "image/jpeg"
-                else:
-                    img.save(img_bytes, format='PNG')
-                    mime_type = "image/png"
-                
+                img.save(img_bytes, format='PNG')
                 img_bytes = img_bytes.getvalue()
                 
                 st.download_button(
                     label="⬇️ Download",
                     data=img_bytes,
-                    file_name=f"seo_image_{idx + 1}.{file_format}",
-                    mime=mime_type,
+                    file_name=f"seo_image.png",
+                    mime="image/png",
                     key=f"download_{idx}"
                 )
             except:
