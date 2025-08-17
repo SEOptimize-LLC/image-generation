@@ -270,7 +270,7 @@ if st.button("🎨 Generate Image", type="primary", disabled=not st.session_stat
     else:
         try:
             with st.spinner(f"🎨 Generating {n_images} image(s)... This may take a moment..."):
-                # Initialize OpenAI client
+                # Initialize OpenAI client ONLY when needed
                 client = OpenAI(api_key=api_key)
                 
                 # Prepare parameters for gpt-image-1
