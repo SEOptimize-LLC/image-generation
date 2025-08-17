@@ -1,9 +1,10 @@
 import streamlit as st
+import openai
+from openai import OpenAI
 import requests
 from PIL import Image
 from io import BytesIO
-import os
-import json
+import base64
 
 # Page configuration
 st.set_page_config(
@@ -12,7 +13,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Professional CSS (keeping your styling)
+# Professional CSS styling
 st.markdown("""
     <style>
     /* Import Google Fonts */
@@ -75,132 +76,117 @@ st.markdown("""
         font-weight: 600 !important;
     }
     
-    /* Buttons */
+    /* Main buttons */
     .stButton > button {
-        background: linear-gradient(135deg, var(--seo-green) 0%, var(--seo-green-dark) 100%);
-        color: white;
-        border: none;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        font-size: 1rem;
-        border-radius: 10px;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 12px rgba(0, 210, 106, 0.25);
-        width: 100%;
+        background-color: var(--seo-green) !important;
+        color: white !important;
+        border-radius: 10px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        border: none !important;
+        transition: all 0.3s ease !important;
+        font-size: 1rem !important;
     }
     
     .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0, 210, 106, 0.35);
+        background-color: var(--seo-green-dark) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0, 210, 106, 0.3) !important;
     }
     
-    /* Text inputs and text areas */
+    /* Input fields */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea {
-        border: 2px solid var(--border-color);
-        border-radius: 10px;
-        padding: 0.75rem;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-        background: white;
+        border-radius: 10px !important;
+        border: 2px solid #e0e0e0 !important;
+        padding: 0.75rem !important;
+        font-size: 1rem !important;
+        transition: border-color 0.3s ease !important;
     }
     
     .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
-        border-color: var(--seo-green);
-        box-shadow: 0 0 0 3px rgba(0, 210, 106, 0.1);
-        outline: none;
+        border-color: var(--seo-green) !important;
+        box-shadow: 0 0 0 2px rgba(0, 210, 106, 0.1) !important;
     }
     
     /* Select boxes */
     .stSelectbox > div > div {
-        border-radius: 10px;
-        border: 2px solid var(--border-color);
-        background: white;
+        border-radius: 10px !important;
+        border: 2px solid #e0e0e0 !important;
+        padding: 0.25rem !important;
     }
     
-    .stSelectbox > div > div:hover {
-        border-color: var(--seo-green);
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 1rem;
+        background-color: transparent !important;
+        padding: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.75rem 1.5rem !important;
+        background-color: white !important;
+        border-radius: 10px !important;
+        border: 2px solid #e0e0e0 !important;
+        color: var(--text-secondary) !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: var(--seo-green) !important;
+        color: white !important;
+        border-color: var(--seo-green) !important;
     }
     
     /* Sliders */
-    .stSlider > div > div > div > div {
-        background: linear-gradient(90deg, var(--seo-green-dark) 0%, var(--seo-green) 100%);
+    .stSlider > div > div {
+        background-color: #e0e0e0 !important;
     }
     
-    /* Radio buttons */
-    .stRadio > div > label > div:first-child > div[data-checked="true"] {
-        background-color: var(--seo-green);
-        border-color: var(--seo-green);
+    .stSlider > div > div > div {
+        background-color: var(--seo-green) !important;
     }
     
-    /* Expander */
-    .streamlit-expanderHeader {
+    /* Info boxes */
+    .stInfo {
+        background-color: rgba(0, 210, 106, 0.1) !important;
+        border-left: 4px solid var(--seo-green) !important;
+        border-radius: 8px !important;
+        padding: 1rem !important;
+    }
+    
+    /* Success/Error messages */
+    .stSuccess {
+        background-color: rgba(0, 210, 106, 0.1) !important;
+        color: var(--seo-green-dark) !important;
+        border-radius: 8px !important;
+        padding: 1rem !important;
+    }
+    
+    .stError {
+        border-radius: 8px !important;
+        padding: 1rem !important;
+    }
+    
+    /* Custom card style */
+    .custom-card {
         background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: var(--shadow-sm);
         border: 1px solid var(--border-color);
-        border-radius: 10px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-    
-    .streamlit-expanderHeader:hover {
-        border-color: var(--seo-green);
-        box-shadow: var(--shadow-sm);
-    }
-    
-    /* Sidebar styling */
-    section[data-testid="stSidebar"] {
-        background: white;
-        border-right: 1px solid var(--border-color);
-    }
-    
-    section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 2.5rem !important;
-    }
-    
-    /* Success/Error/Info messages */
-    .stAlert {
-        border-radius: 10px;
-        border: none;
-        box-shadow: var(--shadow-sm);
-    }
-    
-    /* Download button */
-    .stDownloadButton > button {
-        background: white;
-        color: var(--seo-green);
-        border: 2px solid var(--seo-green);
-        padding: 0.5rem 1.5rem;
-        font-weight: 600;
-        border-radius: 10px;
-        transition: all 0.3s ease;
-    }
-    
-    .stDownloadButton > button:hover {
-        background: var(--seo-green);
-        color: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 210, 106, 0.25);
-    }
-    
-    /* Info badge */
-    .info-badge {
-        display: inline-block;
-        background: rgba(0, 210, 106, 0.1);
-        color: var(--seo-green-dark);
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.875rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
     }
     
     /* Footer */
     .footer {
         text-align: center;
-        padding: 3rem 0 2rem;
+        padding: 2rem 0;
+        margin-top: 3rem;
+        border-top: 1px solid var(--border-color);
         color: var(--text-secondary);
-        font-size: 0.9rem;
     }
     
     .footer a {
@@ -212,39 +198,13 @@ st.markdown("""
     .footer a:hover {
         text-decoration: underline;
     }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
-
-# Function to call OpenAI API directly without the problematic client
-def generate_image_direct(api_key, model, prompt, size, quality, n=1, style=None):
-    """Direct API call to OpenAI without using the client library"""
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "model": model,
-        "prompt": prompt,
-        "n": n,
-        "size": size
-    }
-    
-    if quality:
-        data["quality"] = quality
-    if style and model == "dall-e-3":
-        data["style"] = style
-    
-    response = requests.post(
-        "https://api.openai.com/v1/images/generations",
-        headers=headers,
-        json=data
-    )
-    
-    if response.status_code == 200:
-        return response.json()
-    else:
-        raise Exception(f"API Error: {response.status_code} - {response.text}")
 
 # Brand Header
 st.markdown("""
@@ -252,260 +212,261 @@ st.markdown("""
         <div class="brand-title">
             <span class="brand-seo">SEO</span><span class="brand-optimize">ptimize</span>
         </div>
-        <div class="brand-tagline">AI-Powered Image Generation</div>
+        <div class="brand-tagline">AI-Powered Image Generation Platform</div>
     </div>
     """, unsafe_allow_html=True)
 
 # Initialize session state
 if 'api_key' not in st.session_state:
-    if "OPENAI_API_KEY" in st.secrets:
-        st.session_state.api_key = st.secrets["OPENAI_API_KEY"]
-    else:
-        st.session_state.api_key = ""
+    st.session_state.api_key = ""
 if 'generated_images' not in st.session_state:
     st.session_state.generated_images = []
 
-# Sidebar
+# Sidebar Configuration
 with st.sidebar:
-    st.markdown("### ⚙️ Configuration")
+    st.markdown("## ⚙️ Configuration")
     
-    if not st.session_state.api_key:
-        st.warning("⚠️ API Key Required")
-        
-        with st.expander("📚 How to add API Key"):
-            st.markdown("""
-            **For Streamlit Cloud:**
-            1. Go to Settings → Secrets
-            2. Add:
-            ```toml
-            OPENAI_API_KEY = "sk-..."
-            ```
-            
-            **For temporary use:**
-            Enter below (session only)
-            """)
-        
-        api_key = st.text_input(
-            "OpenAI API Key",
-            type="password",
-            placeholder="sk-...",
-            help="Enter your OpenAI API key"
-        )
-        if api_key:
-            st.session_state.api_key = api_key
-            st.rerun()
-    else:
-        st.success("✅ API Key configured")
-        if st.button("🔄 Change API Key"):
-            st.session_state.api_key = ""
-            st.rerun()
-    
-    st.markdown("---")
-    
-    # Model Selection - KEEPING GPT-IMAGE-1
-    st.markdown("### 🤖 Model Selection")
-    model_choice = st.radio(
-        "Choose Model",
-        options=["gpt-image-1", "dall-e-3", "dall-e-2"],
-        index=1,  # Default to dall-e-3 since gpt-image-1 might not be available for all
-        help="Select the AI model for image generation",
-        key="model_radio"
+    api_key = st.text_input(
+        "OpenAI API Key",
+        type="password",
+        value=st.session_state.api_key,
+        help="Enter your OpenAI API key to generate images"
     )
     
-    if model_choice == "gpt-image-1":
-        st.markdown('<span class="info-badge">Latest Model</span>', unsafe_allow_html=True)
-        st.info("Note: Requires special access")
-    elif model_choice == "dall-e-3":
-        st.markdown('<span class="info-badge">Recommended</span>', unsafe_allow_html=True)
-    else:
-        st.markdown('<span class="info-badge">Fast Generation</span>', unsafe_allow_html=True)
+    if api_key:
+        st.session_state.api_key = api_key
+        client = OpenAI(api_key=api_key)
     
     st.markdown("---")
     
-    st.markdown("### 📖 About")
-    st.markdown("""
-    **Models:**
-    - **gpt-image-1**: Latest, up to 10 images
-    - **DALL-E 3**: Best quality
-    - **DALL-E 2**: Fast generation
-    
-    [🌐 SEOptimize LLC](https://seoptimizellc.com)
+    st.markdown("### 🎯 Quick Tips")
+    st.info("""
+    • Be specific and descriptive
+    • Include style keywords
+    • Mention colors and lighting
+    • Add artistic references
     """)
+    
+    st.markdown("---")
+    st.markdown("### 📊 Usage Stats")
+    st.metric("Images Generated", len(st.session_state.generated_images))
+    
+    if st.button("🗑️ Clear Gallery", use_container_width=True):
+        st.session_state.generated_images = []
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; padding-top: 1rem;'>
+        <small>Powered by</small><br>
+        <strong style='color: #00D26A;'>SEOptimize LLC</strong>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Main Content Area
-prompt = st.text_area(
-    "✍️ **Enter your image prompt:**",
-    value="A majestic golden retriever sitting in a sunlit meadow, photorealistic, highly detailed",
-    height=100,
-    help="Be descriptive for best results"
-)
-
-# Parameter Controls
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns([2, 1])
 
 with col1:
-    if model_choice == "gpt-image-1":
-        num_images = st.slider(
-            "Number of images",
-            min_value=1,
-            max_value=10,
-            value=1,
-            key=f"num_images_{model_choice}"
-        )
-    else:
-        num_images = 1
-        st.markdown("**Number of images**")
-        st.info(f"1 ({model_choice} limit)")
+    prompt = st.text_area(
+        "Enter your prompt",
+        placeholder="A professional business photo, modern office, natural lighting, high quality...",
+        height=100,
+        help="Describe the image you want to generate"
+    )
 
 with col2:
-    quality_steps = st.slider(
-        "Quality (steps)",
-        min_value=10,
-        max_value=50,
-        value=20
-    )
+    st.markdown("### 🎲 Prompt Enhancers")
+    styles = ["Photorealistic", "Digital Art", "Oil Painting", "Watercolor", "3D Render", "Anime", "Minimalist"]
+    selected_style = st.selectbox("Style Preset", ["None"] + styles)
 
-with col3:
-    prompt_adherence = st.slider(
-        "Prompt Adherence",
-        min_value=1.0,
-        max_value=10.0,
-        value=7.5,
-        step=0.5
-    )
+# Tabs for settings
+tab1, tab2 = st.tabs(["🎨 Basic Settings", "⚡ Advanced Settings"])
 
-# Art Style Selection
-art_style = st.selectbox(
-    "🎨 **Choose an art style:**",
-    options=[
-        "Realistic", "Artistic", "Anime/Manga", "Digital Art",
-        "Oil Painting", "Watercolor", "Pencil Sketch", "3D Render",
-        "Cartoon", "Photography", "Abstract", "Surreal",
-        "Minimalist", "Vintage", "Cyberpunk"
-    ],
-    index=0
-)
-
-# Advanced Settings
-with st.expander("🔧 Advanced Settings"):
-    adv_col1, adv_col2 = st.columns(2)
+with tab1:
+    col1, col2 = st.columns(2)
     
-    with adv_col1:
-        if model_choice == "gpt-image-1":
-            image_size = st.selectbox(
-                "Image Size",
-                options=["1024x1024", "1536x1024", "1792x1024", "1024x1792"],
-                index=0
-            )
-            image_quality = st.radio(
-                "Image Quality",
-                options=["high", "medium", "low"],
-                index=0
-            )
-        elif model_choice == "dall-e-3":
-            image_size = st.selectbox(
-                "Image Size",
-                options=["1024x1024", "1792x1024", "1024x1792"],
-                index=0
-            )
-            image_quality = st.radio(
-                "Image Quality",
+    with col1:
+        # Model Selection - INCLUDING gpt-image-1
+        models = {
+            "gpt-image-1": "OpenAI (GPT Image 1)",
+            "dall-e-3": "DALL·E 3 (Best Quality)",
+            "dall-e-2": "DALL·E 2 (Fast)",
+        }
+        
+        model = st.selectbox(
+            "Select Model",
+            options=list(models.keys()),
+            format_func=lambda x: models[x],
+            help="Choose the AI model for image generation"
+        )
+    
+    with col2:
+        # Size options based on model
+        if model == "dall-e-3":
+            sizes = ["1024x1024", "1792x1024", "1024x1792"]
+        elif model == "dall-e-2":
+            sizes = ["256x256", "512x512", "1024x1024"]
+        else:  # gpt-image-1
+            sizes = ["256x256", "512x512", "1024x1024"]
+        
+        size = st.selectbox(
+            "Image Size",
+            options=sizes,
+            help="Resolution of the generated image"
+        )
+    
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        if model == "dall-e-3":
+            quality = st.selectbox(
+                "Quality",
                 options=["standard", "hd"],
-                index=1
+                help="HD quality takes longer but produces better results"
             )
-            style_param = st.radio(
-                "Style Mode",
-                options=["vivid", "natural"],
-                index=0
-            )
-        else:  # dall-e-2
-            image_size = st.selectbox(
-                "Image Size",
-                options=["256x256", "512x512", "1024x1024"],
-                index=2
-            )
-            image_quality = "standard"
-            style_param = None
+        else:
+            quality = "standard"
+            st.info("Quality setting only available for DALL·E 3")
     
-    with adv_col2:
-        negative_prompt = st.text_area(
-            "Negative Prompt (optional)",
-            placeholder="Things to avoid...",
-            height=100
+    with col4:
+        if model == "dall-e-2":
+            max_images = 10
+        else:
+            max_images = 1
+        
+        num_images = st.number_input(
+            "Number of Images",
+            min_value=1,
+            max_value=max_images,
+            value=1,
+            help=f"Maximum {max_images} images for {models[model]}"
+        )
+
+with tab2:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        output_format = st.selectbox(
+            "Output Format",
+            options=["png", "jpeg", "webp"],
+            help="File format for downloads"
         )
         
-        seed = st.number_input(
-            "Seed (optional)",
-            min_value=-1,
-            max_value=999999999,
-            value=-1
+        # Response format - ONLY for DALL-E models, NOT for gpt-image-1
+        if model in ["dall-e-2", "dall-e-3"]:
+            response_format = st.selectbox(
+                "Response Format",
+                options=["url", "b64_json"],
+                help="URL format is faster, Base64 is more reliable"
+            )
+        else:
+            # gpt-image-1 ALWAYS returns base64
+            response_format = "b64_json"
+            st.info("gpt-image-1 always returns base64-encoded images")
+    
+    with col2:
+        enhance_prompt = st.checkbox(
+            "Auto-enhance prompt",
+            value=True,
+            help="Automatically improve your prompt for better results"
         )
+        
+        if model == "dall-e-3":
+            style_option = st.selectbox(
+                "Style Option",
+                options=["vivid", "natural"],
+                help="Vivid: hyper-real and dramatic. Natural: more natural, less hyper-real"
+            )
+        else:
+            style_option = None
 
-# Style modifiers
-style_modifiers = {
-    "Realistic": "photorealistic, highly detailed, professional photography",
-    "Artistic": "artistic, creative, expressive brushstrokes",
-    "Anime/Manga": "anime style, manga art, Japanese animation",
-    "Digital Art": "digital painting, concept art, trending on artstation",
-    "Oil Painting": "oil painting, classical art, museum quality",
-    "Watercolor": "watercolor painting, soft colors, artistic",
-    "Pencil Sketch": "pencil drawing, sketch art, detailed linework",
-    "3D Render": "3D rendered, octane render, unreal engine",
-    "Cartoon": "cartoon style, animated, colorful illustration",
-    "Photography": "professional photography, DSLR quality, bokeh",
-    "Abstract": "abstract art, modern art, creative composition",
-    "Surreal": "surrealist art, dreamlike, Salvador Dali style",
-    "Minimalist": "minimalist, simple, clean lines, negative space",
-    "Vintage": "vintage style, retro, nostalgic, aged film",
-    "Cyberpunk": "cyberpunk, neon lights, futuristic, dystopian"
-}
+# Process prompt enhancement
+if enhance_prompt and prompt:
+    enhancement_additions = []
+    if selected_style != "None":
+        enhancement_additions.append(f"in {selected_style} style")
+    
+    if enhance_prompt:
+        enhancement_additions.extend(["high quality", "detailed", "professional"])
+    
+    enhanced_prompt = f"{prompt}, {', '.join(enhancement_additions)}" if enhancement_additions else prompt
+else:
+    enhanced_prompt = prompt
 
-# Generate Button
-st.markdown("<br>", unsafe_allow_html=True)
-if st.button("🎨 Generate Images", type="primary", use_container_width=True):
+# Display enhanced prompt
+if prompt and enhance_prompt:
+    with st.expander("📝 Enhanced Prompt"):
+        st.text(enhanced_prompt)
+
+# Generate button
+if st.button("🎨 Generate Image", type="primary", use_container_width=True):
     if not st.session_state.api_key:
-        st.error("⚠️ Please configure your OpenAI API key in the sidebar.")
+        st.error("⚠️ Please enter your OpenAI API key in the sidebar")
+    elif not prompt:
+        st.error("⚠️ Please enter a prompt")
     else:
-        try:
-            full_prompt = f"{prompt}, {style_modifiers.get(art_style, '')}"
-            if negative_prompt:
-                full_prompt += f". Avoid: {negative_prompt}"
-            if seed != -1:
-                full_prompt += f" [seed:{seed}]"
-            
-            with st.spinner(f"Creating {num_images} image(s)..."):
-                # Use direct API call instead of the problematic client
-                style_to_use = style_param if model_choice == "dall-e-3" else None
+        with st.spinner("🎨 Creating your image..."):
+            try:
+                # Build parameters based on model
+                params = {
+                    "model": model,
+                    "prompt": enhanced_prompt,
+                    "size": size,
+                    "n": num_images
+                }
                 
-                result = generate_image_direct(
-                    api_key=st.session_state.api_key,
-                    model=model_choice,
-                    prompt=full_prompt,
-                    size=image_size,
-                    quality=image_quality,
-                    n=num_images if model_choice == "gpt-image-1" else 1,
-                    style=style_to_use
-                )
+                # Add model-specific parameters
+                if model == "dall-e-3":
+                    params["quality"] = quality
+                    if style_option:
+                        params["style"] = style_option
                 
-                generated_images = []
-                for img_data in result.get('data', []):
-                    generated_images.append({
-                        'url': img_data['url'],
-                        'prompt': full_prompt,
-                        'model': model_choice
-                    })
+                # Add response_format ONLY for dall-e models
+                if model in ["dall-e-2", "dall-e-3"]:
+                    params["response_format"] = response_format
+                # gpt-image-1 doesn't support response_format parameter
                 
-                st.session_state.generated_images = generated_images
-                st.success(f"✅ Successfully generated {len(generated_images)} image(s)!")
+                # Generate image
+                response = client.images.generate(**params)
                 
-        except Exception as e:
-            error_msg = str(e)
-            st.error(f"❌ Error: {error_msg}")
-            
-            if "404" in error_msg or "does not exist" in error_msg:
-                st.info("The selected model may not be available. Try using dall-e-3 or dall-e-2.")
-            else:
-                st.info("Please check your API key and permissions.")
+                # Process generated images
+                for img_data in response.data:
+                    image_info = {
+                        'prompt': enhanced_prompt,
+                        'model': model,
+                        'size': size,
+                        'format': output_format
+                    }
+                    
+                    # Handle different response formats
+                    if model == "gpt-image-1" or response_format == "b64_json":
+                        # gpt-image-1 always returns base64, or if b64_json was selected
+                        image_info['b64_json'] = img_data.b64_json
+                        # Decode base64 to get image
+                        img_bytes = base64.b64decode(img_data.b64_json)
+                        image_info['image'] = Image.open(BytesIO(img_bytes))
+                    else:
+                        # URL format for dall-e models
+                        image_info['url'] = img_data.url
+                        # Download image for display
+                        response = requests.get(img_data.url)
+                        image_info['image'] = Image.open(BytesIO(response.content))
+                    
+                    st.session_state.generated_images.append(image_info)
+                
+                st.success(f"✅ Successfully generated {num_images} image(s)!")
+                st.balloons()
+                
+            except Exception as e:
+                error_msg = str(e)
+                st.error(f"❌ Error: {error_msg}")
+                
+                if "404" in error_msg or "does not exist" in error_msg:
+                    st.info("The selected model may not be available. Try using dall-e-3 or dall-e-2.")
+                elif "response_format" in error_msg:
+                    st.info("There was an issue with the response format. This has been logged for fixing.")
+                else:
+                    st.info("Please check your API key and permissions.")
 
 # Display Generated Images
 if st.session_state.generated_images:
@@ -517,27 +478,38 @@ if st.session_state.generated_images:
         
         with col1:
             try:
-                response = requests.get(img_data['url'])
-                img = Image.open(BytesIO(response.content))
-                st.image(img, caption=f"Image {idx + 1} ({img_data['model']})", use_column_width=True)
-            except:
-                st.error(f"Could not load image {idx + 1}")
+                # Display the image (already loaded as PIL Image)
+                st.image(img_data['image'], caption=f"Image {idx + 1} ({img_data['model']})", use_column_width=True)
+            except Exception as e:
+                st.error(f"Could not display image {idx + 1}: {str(e)}")
         
         with col2:
             try:
+                # Prepare image for download
                 img_bytes = BytesIO()
-                img.save(img_bytes, format='PNG')
+                file_format = img_data.get('format', 'png')
+                
+                if file_format == 'webp':
+                    img_data['image'].save(img_bytes, format='WEBP', quality=95)
+                    mime_type = "image/webp"
+                elif file_format == 'jpeg':
+                    img_data['image'].save(img_bytes, format='JPEG', quality=95)
+                    mime_type = "image/jpeg"
+                else:
+                    img_data['image'].save(img_bytes, format='PNG')
+                    mime_type = "image/png"
+                
                 img_bytes = img_bytes.getvalue()
                 
                 st.download_button(
                     label="⬇️ Download",
                     data=img_bytes,
-                    file_name=f"seo_image_{idx + 1}.png",
-                    mime="image/png",
+                    file_name=f"seo_image_{idx + 1}.{file_format}",
+                    mime=mime_type,
                     key=f"download_{idx}"
                 )
-            except:
-                st.error("Download unavailable")
+            except Exception as e:
+                st.error(f"Download unavailable: {str(e)}")
 
 # Footer
 st.markdown("""
