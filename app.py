@@ -9,50 +9,217 @@ import os
 
 # Page configuration
 st.set_page_config(
-    page_title="Fast AI Image Generator",
-    page_icon="✨",
+    page_title="SEOptimize AI Image Generator",
+    page_icon="🎨",
     layout="centered"
 )
 
-# Custom CSS for styling
+# Custom CSS with SEOptimize branding (green theme from logo)
 st.markdown("""
     <style>
+    /* Main theme colors from SEOptimize */
+    :root {
+        --seo-green: #00D26A;
+        --seo-dark: #1a1a1a;
+        --seo-darker: #0d0d0d;
+        --seo-light: #f5f5f5;
+    }
+    
+    /* Dark theme background */
+    .stApp {
+        background-color: #0d0d0d;
+    }
+    
+    /* Main content area */
     .main {
         padding-top: 2rem;
+        background-color: #0d0d0d;
     }
+    
+    /* Headers and text */
+    h1, h2, h3 {
+        color: #ffffff !important;
+    }
+    
+    /* Brand header */
+    .brand-header {
+        text-align: center;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        background: linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 100%);
+        border-radius: 12px;
+        border: 1px solid #00D26A20;
+    }
+    
+    .brand-text {
+        font-size: 3rem;
+        font-weight: 800;
+        letter-spacing: -1px;
+    }
+    
+    .seo-text {
+        color: #ffffff;
+    }
+    
+    .optimize-text {
+        color: #00D26A;
+    }
+    
+    .tagline {
+        color: #888;
+        font-size: 1.1rem;
+        margin-top: 0.5rem;
+    }
+    
+    /* Buttons with SEOptimize green */
     .stButton > button {
-        background-color: #ef4444;
+        background: linear-gradient(135deg, #00D26A 0%, #00B55A 100%);
         color: white;
         border-radius: 8px;
-        padding: 0.5rem 2rem;
+        padding: 0.75rem 2rem;
         font-weight: 600;
         border: none;
         width: 100%;
         margin-top: 1rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 210, 106, 0.3);
     }
+    
     .stButton > button:hover {
-        background-color: #dc2626;
+        background: linear-gradient(135deg, #00B55A 0%, #00A050 100%);
+        box-shadow: 0 6px 20px rgba(0, 210, 106, 0.4);
+        transform: translateY(-2px);
     }
-    h1 {
-        text-align: center;
-        padding-bottom: 2rem;
+    
+    /* Sidebar styling */
+    .css-1d391kg, [data-testid="stSidebar"] {
+        background-color: #1a1a1a;
+        border-right: 1px solid #00D26A20;
     }
-    .stSelectbox > div > div {
+    
+    /* Input fields */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > div,
+    .stNumberInput > div > div > input {
+        background-color: #1a1a1a;
+        color: #ffffff;
+        border: 1px solid #00D26A30;
         border-radius: 8px;
     }
+    
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #00D26A;
+        box-shadow: 0 0 0 1px #00D26A40;
+    }
+    
+    /* Sliders with green accent */
+    .stSlider > div > div > div > div {
+        background-color: #00D26A;
+    }
+    
+    .stSlider > div > div > div > div > div {
+        background-color: #00D26A;
+        border: 2px solid #ffffff;
+    }
+    
+    /* Radio buttons and checkboxes */
+    .stRadio > div > label > div:first-child > div,
+    .stCheckbox > label > div:first-child > div {
+        border-color: #00D26A;
+    }
+    
+    .stRadio > div > label > div:first-child > div[data-checked="true"],
+    .stCheckbox > label > div:first-child > div[data-checked="true"] {
+        background-color: #00D26A;
+        border-color: #00D26A;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background-color: #1a1a1a;
+        color: #ffffff;
+        border: 1px solid #00D26A30;
+        border-radius: 8px;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        border-color: #00D26A;
+    }
+    
+    /* Success/Error/Warning messages */
+    .stAlert > div {
+        background-color: #1a1a1a;
+        border-left: 4px solid #00D26A;
+        color: #ffffff;
+    }
+    
+    /* Info boxes */
     .info-box {
-        background-color: #fef3c7;
+        background: linear-gradient(135deg, #1a1a1a 0%, #222 100%);
         padding: 1rem;
         border-radius: 8px;
-        border-left: 4px solid #f59e0b;
+        border-left: 4px solid #00D26A;
         margin-bottom: 1rem;
+        color: #ffffff;
+    }
+    
+    /* Download buttons */
+    .stDownloadButton > button {
+        background-color: #1a1a1a;
+        border: 1px solid #00D26A;
+        color: #00D26A;
+    }
+    
+    .stDownloadButton > button:hover {
+        background-color: #00D26A;
+        color: #ffffff;
+    }
+    
+    /* Footer styling */
+    .footer {
+        text-align: center;
+        color: #888;
+        padding: 2rem;
+        border-top: 1px solid #00D26A20;
+        margin-top: 3rem;
+    }
+    
+    .footer a {
+        color: #00D26A;
+        text-decoration: none;
+    }
+    
+    .footer a:hover {
+        text-decoration: underline;
+    }
+    
+    /* Selectbox dropdown */
+    [data-baseweb="select"] {
+        background-color: #1a1a1a;
+    }
+    
+    /* Labels */
+    .stSlider > label,
+    .stTextInput > label,
+    .stTextArea > label,
+    .stSelectbox > label,
+    .stNumberInput > label {
+        color: #ffffff !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# Title
-st.markdown("# ✨ Fast AI Image Generator ✨")
-st.markdown("Generate AI images with OpenAI's latest image generation models", unsafe_allow_html=True)
+# SEOptimize Branded Header
+st.markdown("""
+    <div class="brand-header">
+        <div class="brand-text">
+            <span class="seo-text">SEO</span><span class="optimize-text">ptimize</span>
+        </div>
+        <div class="tagline">AI Image Generator</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Initialize session state
 if 'api_key' not in st.session_state:
@@ -63,9 +230,21 @@ if 'api_key' not in st.session_state:
         st.session_state.api_key = ""
 if 'generated_images' not in st.session_state:
     st.session_state.generated_images = []
+if 'num_images' not in st.session_state:
+    st.session_state.num_images = 1
+if 'previous_model' not in st.session_state:
+    st.session_state.previous_model = "gpt-image-1"
 
 # API Key configuration in sidebar
 with st.sidebar:
+    st.markdown("""
+        <div style="text-align: center; padding: 1rem 0; border-bottom: 1px solid #00D26A30;">
+            <span style="color: #ffffff; font-size: 1.5rem; font-weight: 700;">
+                SEO<span style="color: #00D26A;">ptimize</span>
+            </span>
+        </div>
+    """, unsafe_allow_html=True)
+    
     st.header("⚙️ Configuration")
     
     # API Key Management
@@ -113,41 +292,41 @@ with st.sidebar:
         help="gpt-image-1 is the latest and most advanced model"
     )
     
+    # Reset num_images when model changes
+    if model_choice != st.session_state.previous_model:
+        st.session_state.num_images = 1
+        st.session_state.previous_model = model_choice
+    
     if model_choice == "gpt-image-1":
-        st.info("💫 Using latest gpt-image-1 model with enhanced capabilities")
+        st.info("💫 Latest gpt-image-1 model")
+    else:
+        st.info("🎨 DALL-E 3 model")
     
     st.markdown("---")
     st.markdown("### About")
     st.markdown("""
-    This app uses OpenAI's image generation API:
+    **Image Generation Models:**
     
-    **gpt-image-1** (Recommended)
-    - Latest multimodal model
-    - Higher quality outputs
-    - Better text rendering
-    - Multiple images per request
-    - WebP format support
+    **gpt-image-1** 
+    - Latest model
+    - Up to 10 images
+    - WebP support
     - Compression control
     
     **DALL-E 3**
-    - Previous generation
-    - Still very capable
-    - Single image per request
-    - Style modes (vivid/natural)
-    
-    [API Documentation](https://platform.openai.com/docs/guides/image-generation)
+    - Proven quality
+    - Style modes
+    - Single image
     """)
-
-# Check for organization verification notice
-if st.session_state.api_key and model_choice == "gpt-image-1":
-    with st.container():
-        st.markdown("""
-        <div class="info-box">
-        <b>📋 Note:</b> The gpt-image-1 model may require organization verification. 
-        If you encounter access issues, please verify your organization at 
-        <a href="https://platform.openai.com/settings/organization/general" target="_blank">OpenAI Settings</a>.
-        </div>
-        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align: center; padding-top: 1rem;">
+        <a href="https://seoptimizellc.com" target="_blank" style="color: #00D26A; text-decoration: none;">
+            🌐 SEOptimize LLC
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Main content
 col1, col2 = st.columns([3, 1])
@@ -169,13 +348,19 @@ col1, col2, col3 = st.columns(3)
 with col1:
     # Adjust max images based on model
     max_images = 10 if model_choice == "gpt-image-1" else 1
+    
+    # Ensure the current value doesn't exceed the max for the selected model
+    current_value = min(st.session_state.num_images, max_images)
+    
     num_images = st.slider(
         "Number of images",
         min_value=1,
         max_value=max_images,
-        value=1,
-        help=f"Generate up to {max_images} images" + (" (gpt-image-1 supports batch generation)" if max_images > 1 else " (DALL-E 3 limitation)")
+        value=current_value,
+        key="num_images_slider",
+        help=f"Generate up to {max_images} images" + (" (batch generation)" if max_images > 1 else " (DALL-E 3 limit)")
     )
+    st.session_state.num_images = num_images
 
 with col2:
     quality_steps = st.slider(
@@ -298,7 +483,7 @@ with st.expander("🔧 Advanced Settings"):
         
         # gpt-image-1 specific parameters
         if model_choice == "gpt-image-1":
-            st.markdown("**gpt-image-1 Specific Settings:**")
+            st.markdown("**gpt-image-1 Settings:**")
             
             # Background parameter
             background_option = st.selectbox(
@@ -359,6 +544,7 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
             
             # Show loading state
             with st.spinner(f"🎨 Generating {num_images} image(s) with {model_choice}..."):
+                # Initialize OpenAI client without proxies parameter
                 client = OpenAI(api_key=st.session_state.api_key)
                 
                 generated_images = []
@@ -376,9 +562,9 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
                     }
                     
                     # Add optional parameters if not default
-                    if background_option != "default":
+                    if background_option and background_option != "default":
                         params['background'] = background_option
-                    if output_compression != 100:
+                    if output_compression is not None and output_compression != 100:
                         params['output_compression'] = output_compression
                     
                     try:
@@ -439,17 +625,12 @@ if st.button("🎨 Generate Images", type="primary", use_container_width=True):
             st.error("❌ Authentication failed. Please check your API key.")
             st.info("💡 Make sure your API key is valid and has the necessary permissions.")
         except openai.PermissionDeniedError:
-            st.error("❌ Permission denied. Your organization may need verification.")
-            st.info("""
-            📋 To use gpt-image-1, you may need to:
-            1. Verify your organization at https://platform.openai.com/settings/organization/general
-            2. Ensure your API key has image generation permissions
-            3. Try using dall-e-3 model instead
-            """)
+            st.error("❌ Permission denied. Your API key may not have access to this model.")
+            st.info("💡 Try using the dall-e-3 model or check your API key permissions.")
         except Exception as e:
             st.error(f"❌ Error generating images: {str(e)}")
-            if "gpt-image-1" in str(e).lower():
-                st.info("💡 Try switching to dall-e-3 model in the sidebar if gpt-image-1 is not available.")
+            if "gpt-image-1" in str(e).lower() or "model" in str(e).lower():
+                st.info("💡 Try switching to dall-e-3 model in the sidebar if gpt-image-1 is not available for your account.")
 
 # Display generated images
 if st.session_state.generated_images:
@@ -502,7 +683,7 @@ if st.session_state.generated_images:
                 st.download_button(
                     label=f"⬇️ Download",
                     data=img_bytes,
-                    file_name=f"generated_{img_data['model']}_{idx + 1}.{file_format}",
+                    file_name=f"seo_image_{idx + 1}.{file_format}",
                     mime=mime_type,
                     key=f"download_{idx}"
                 )
@@ -513,11 +694,10 @@ if st.session_state.generated_images:
 st.markdown("---")
 st.markdown(
     f"""
-    <div style='text-align: center; color: #888; padding: 1rem;'>
-    Built with Streamlit and OpenAI's Image Generation API<br>
-    Current Model: {model_choice if 'model_choice' in locals() else 'gpt-image-1'}<br>
-    <a href="https://platform.openai.com/docs/guides/image-generation" target="_blank">API Documentation</a> | 
-    <a href="https://platform.openai.com/settings/organization/general" target="_blank">Verify Organization</a>
+    <div class="footer">
+        Powered by <a href="https://seoptimizellc.com" target="_blank">SEOptimize LLC</a> 
+        | Model: {model_choice if 'model_choice' in locals() else 'gpt-image-1'}
+        | <a href="https://platform.openai.com/docs/guides/image-generation" target="_blank">API Docs</a>
     </div>
     """,
     unsafe_allow_html=True
