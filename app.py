@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 from PIL import Image
-from openai import OpenAI
 from io import BytesIO
 import os
 
@@ -238,9 +237,7 @@ def get_openai_client(api_key):
     
     try:
         # Create client with absolute minimum configuration
-        client = OpenAI(
-            api_key=st.session_state.api_key
-        )
+        client = OpenAI(api_key=api_key)
         return client
     finally:
         # Restore proxy settings
